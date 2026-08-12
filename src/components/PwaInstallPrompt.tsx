@@ -51,15 +51,13 @@ export const PwaInstallPrompt: React.FC = () => {
     <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:max-w-sm z-40 bg-neutral-900/95 border border-amber-500/30 rounded-2xl p-4 shadow-2xl backdrop-blur-md text-white animate-slideUp">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <img
-            src="/icon-192.png"
-            alt="JADSON BARBER"
-            className="w-11 h-11 rounded-xl object-cover shrink-0 border border-amber-500/30 shadow-md"
-          />
+          <div className="w-10 h-10 rounded-xl bg-amber-500 text-black flex items-center justify-center font-bold text-lg shrink-0">
+            <Download className="w-5 h-5" />
+          </div>
           <div>
-            <h4 className="text-sm font-bold text-amber-400">Instalar o app JADSON BARBER</h4>
+            <h4 className="text-sm font-bold text-amber-400">Instalar o aplicativo JADSON BARBER</h4>
             <p className="text-xs text-gray-300 mt-0.5">
-              Adicione à tela inicial para agendar com 1 clique.
+              Acesse rapidamente da sua tela inicial sem gastar dados.
             </p>
           </div>
         </div>
