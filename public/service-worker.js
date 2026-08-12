@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jadson-barber-pwa-v2';
+const CACHE_NAME = 'jadson-barber-pwa-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
