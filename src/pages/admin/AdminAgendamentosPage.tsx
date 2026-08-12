@@ -14,10 +14,18 @@ import {
   Phone,
   Trash2,
   RotateCcw,
+  Edit3,
+  Play,
+  Check,
+  AlertTriangle,
+  FileText,
+  DollarSign,
+  Sparkles,
+  MessageSquare,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from '../../components/admin/AdminLayout';
-import { Appointment, Barber, ServiceItem, AppointmentService } from '../../types';
+import { Appointment, Barber, ServiceItem, AppointmentService, AppointmentStatus } from '../../types';
 import { getAvailableSlots } from '../../utils/scheduling';
 
 export const AdminAgendamentosPage: React.FC = () => {
@@ -26,9 +34,11 @@ export const AdminAgendamentosPage: React.FC = () => {
     barbers,
     services,
     blockedDates,
+    barbershopInfo,
     addAppointment,
     updateAppointmentStatus,
     rescheduleAppointment,
+    updateAppointment,
     deleteAppointment,
     addToast,
   } = useApp();
@@ -41,6 +51,9 @@ export const AdminAgendamentosPage: React.FC = () => {
   // Modals state
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
   const [targetAppointment, setTargetAppointment] = useState<Appointment | null>(null);
 
   // Manual Booking Form State
@@ -56,10 +69,19 @@ export const AdminAgendamentosPage: React.FC = () => {
   const [reschTime, setReschTime] = useState('');
   const [reschBarberId, setReschBarberId] = useState('');
 
+  // Edit Appointment Form State
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editCustomerPhone, setEditCustomerPhone] = useState('');
+  const [editBarberId, setEditBarberId] = useState('');
+  const [editSelectedServiceIds, setEditSelectedServiceIds] = useState<string[]>([]);
+  const [editStatus, setEditStatus] = useState<AppointmentStatus>('Agendado');
+  const [editNotes, setEditNotes] = useState('');
+  const [editCustomPrice, setEditCustomPrice] = useState<string>('');
+
   // Selected barber for manual booking
   const activeFormBarber = barbers.find((b) => b.id === formBarberId);
 
-  // Calculate selected services & duration
+  // Calculate selected services & duration for manual form
   const selectedServicesList = services.filter((s) => formSelectedServiceIds.includes(s.id));
   const totalDuration = selectedServicesList.reduce((acc, s) => acc + s.durationMinutes, 0) || 30;
   const totalPrice = selectedServicesList.reduce((acc, s) => acc + s.price, 0);
@@ -70,7 +92,8 @@ export const AdminAgendamentosPage: React.FC = () => {
     activeFormBarber,
     totalDuration,
     appointments,
-    blockedDates
+    blockedDates,
+    barbershopInfo.weeklySchedule
   );
 
   // Computed Reschedule Slots
@@ -80,7 +103,8 @@ export const AdminAgendamentosPage: React.FC = () => {
     activeReschBarber,
     targetAppointment?.totalDuration || 30,
     appointments,
-    blockedDates
+    blockedDates,
+    barbershopInfo.weeklySchedule
   );
 
   // Filter Appointments
@@ -102,6 +126,14 @@ export const AdminAgendamentosPage: React.FC = () => {
       setFormSelectedServiceIds(formSelectedServiceIds.filter((id) => id !== servId));
     } else {
       setFormSelectedServiceIds([...formSelectedServiceIds, servId]);
+    }
+  };
+
+  const toggleEditServiceSelection = (servId: string) => {
+    if (editSelectedServiceIds.includes(servId)) {
+      setEditSelectedServiceIds(editSelectedServiceIds.filter((id) => id !== servId));
+    } else {
+      setEditSelectedServiceIds([...editSelectedServiceIds, servId]);
     }
   };
 
@@ -194,10 +226,79 @@ export const AdminAgendamentosPage: React.FC = () => {
     setTargetAppointment(null);
   };
 
+  // Open Edit Modal
+  const handleOpenEdit = (app: Appointment) => {
+    setTargetAppointment(app);
+    setEditCustomerName(app.customerName);
+    setEditCustomerPhone(app.customerPhone);
+    setEditBarberId(app.barberId);
+    setEditSelectedServiceIds(app.services.map((s) => s.id));
+    setEditStatus(app.status);
+    setEditNotes(app.notes || '');
+    setEditCustomPrice(app.totalPrice.toString());
+    setIsEditModalOpen(true);
+  };
+
+  // Confirm Edit Submit
+  const handleSaveEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetAppointment) return;
+
+    if (!editCustomerName.trim() || !editCustomerPhone.trim()) {
+      addToast('O nome e telefone do cliente são obrigatórios.', 'error');
+      return;
+    }
+
+    const editServicesList = services.filter((s) => editSelectedServiceIds.includes(s.id));
+    const calculatedPrice = editServicesList.reduce((acc, s) => acc + s.price, 0);
+    const finalPrice = editCustomPrice ? parseFloat(editCustomPrice) || calculatedPrice : calculatedPrice;
+    const calculatedDuration = editServicesList.reduce((acc, s) => acc + s.durationMinutes, 0) || targetAppointment.totalDuration;
+
+    const selectedBarber = barbers.find((b) => b.id === editBarberId) || {
+      id: targetAppointment.barberId,
+      name: targetAppointment.barberName,
+    };
+
+    await updateAppointment(targetAppointment.id, {
+      customerName: editCustomerName.trim(),
+      customerPhone: editCustomerPhone.trim(),
+      barberId: selectedBarber.id,
+      barberName: selectedBarber.name,
+      services: editServicesList.length > 0
+        ? editServicesList.map((s) => ({
+            id: s.id,
+            name: s.name,
+            price: s.price,
+            durationMinutes: s.durationMinutes,
+          }))
+        : targetAppointment.services,
+      totalPrice: finalPrice,
+      totalDuration: calculatedDuration,
+      status: editStatus,
+      notes: editNotes.trim(),
+    });
+
+    setIsEditModalOpen(false);
+    setTargetAppointment(null);
+  };
+
+  // Open Delete Modal
+  const handleOpenDelete = (app: Appointment) => {
+    setTargetAppointment(app);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!targetAppointment) return;
+    await deleteAppointment(targetAppointment.id);
+    setIsDeleteModalOpen(false);
+    setTargetAppointment(null);
+  };
+
   return (
     <AdminLayout
       title="Gestão Geral de Agendamentos"
-      subtitle="Visualização, criação manual e controle de agenda de todos os barbeiros"
+      subtitle="Visualização, criação manual e controle total de agenda e status de agendamentos"
     >
       {/* Top Action Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#111111] p-4 rounded-2xl border border-neutral-800">
@@ -208,12 +309,12 @@ export const AdminAgendamentosPage: React.FC = () => {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-xs text-white font-mono focus:outline-none"
+              className="bg-transparent text-xs text-white font-mono focus:outline-none cursor-pointer"
             />
             {selectedDate && (
               <button
                 onClick={() => setSelectedDate('todas')}
-                className="text-[10px] text-neutral-400 hover:text-white uppercase font-mono font-bold"
+                className="text-[10px] text-neutral-400 hover:text-white uppercase font-mono font-bold cursor-pointer"
               >
                 Ver Todas
               </button>
@@ -225,7 +326,7 @@ export const AdminAgendamentosPage: React.FC = () => {
             <select
               value={selectedBarberId}
               onChange={(e) => setSelectedBarberId(e.target.value)}
-              className="bg-transparent text-xs text-white font-mono focus:outline-none"
+              className="bg-transparent text-xs text-white font-mono focus:outline-none cursor-pointer"
             >
               <option value="todos">Todos os Barbeiros</option>
               {barbers.map((b) => (
@@ -274,8 +375,8 @@ export const AdminAgendamentosPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Appointments Grid */}
-      <div className="space-y-3">
+      {/* Appointments List */}
+      <div className="space-y-4">
         {filteredAppointments.length === 0 ? (
           <div className="bg-[#111111] border border-dashed border-neutral-800 rounded-2xl p-10 text-center space-y-2">
             <Clock className="w-8 h-8 text-neutral-600 mx-auto" />
@@ -287,79 +388,169 @@ export const AdminAgendamentosPage: React.FC = () => {
           filteredAppointments.map((app) => (
             <div
               key={app.id}
-              className="bg-[#111111] border border-neutral-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-neutral-700 transition-colors"
+              className="bg-[#111111] border border-neutral-800 hover:border-neutral-700 rounded-2xl p-4 sm:p-5 transition-all shadow-lg space-y-4"
             >
-              <div className="flex items-start gap-3.5">
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-center shrink-0 min-w-[80px]">
-                  <div className="text-xs font-mono font-bold text-amber-400">{app.startTime}</div>
-                  <div className="text-[10px] text-neutral-500 font-mono">até {app.endTime}</div>
-                  <div className="text-[9px] text-neutral-400 font-mono mt-1 font-bold">{app.date}</div>
+              {/* Card Top Information */}
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                
+                {/* Time & Date Badge */}
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-center shrink-0 min-w-[90px]">
+                    <div className="text-sm font-mono font-black text-amber-400">{app.startTime}</div>
+                    <div className="text-[10px] text-neutral-500 font-mono">até {app.endTime}</div>
+                    <div className="text-[10px] text-neutral-300 font-mono mt-1 font-bold">{app.date}</div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-base text-white font-sans">{app.customerName}</span>
+                      <a
+                        href={`https://wa.me/55${app.customerPhone.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-amber-400 hover:underline font-mono flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20"
+                      >
+                        <Phone className="w-3 h-3 text-amber-400" />
+                        <span>{app.customerPhone}</span>
+                      </a>
+                    </div>
+
+                    <div className="text-xs text-amber-400 font-bold flex items-center gap-1.5">
+                      <Scissors className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                      <span>{app.services.map((s) => s.name).join(' + ')}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 font-mono pt-1">
+                      <span>Barbeiro: <strong className="text-white">{app.barberName}</strong></span>
+                      <span>•</span>
+                      <span>Duração: <strong className="text-white">{app.totalDuration} min</strong></span>
+                      <span>•</span>
+                      <span>Valor: <strong className="text-amber-400 font-bold">R$ {app.totalPrice.toFixed(2)}</strong></span>
+                    </div>
+
+                    {app.notes && (
+                      <div className="text-xs text-neutral-300 font-mono bg-black/60 p-2 rounded-xl border border-white/5 mt-2 flex items-start gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <span>Obs: {app.notes}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-white font-sans">{app.customerName}</span>
-                    <span className="text-xs text-neutral-400 font-mono">({app.customerPhone})</span>
-                  </div>
-
-                  <div className="text-xs text-amber-400 font-semibold">
-                    {app.services.map((s) => s.name).join(' + ')}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 font-mono">
-                    <span>Barbeiro: <strong className="text-white">{app.barberName}</strong></span>
-                    <span>•</span>
-                    <span>Duração: <strong className="text-white">{app.totalDuration} min</strong></span>
-                    <span>•</span>
-                    <span>Valor: <strong className="text-white">R$ {app.totalPrice.toFixed(2)}</strong></span>
-                  </div>
+                {/* Status Badge */}
+                <div className="flex items-center md:items-end justify-between md:justify-end gap-2 shrink-0">
+                  <span
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-mono font-bold uppercase tracking-wider border shadow-sm ${
+                      app.status === 'Concluído'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : app.status === 'Em atendimento'
+                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                        : app.status === 'Confirmado'
+                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                        : app.status === 'Cancelado'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    }`}
+                  >
+                    {app.status}
+                  </span>
                 </div>
+
               </div>
 
-              {/* Status and Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 border-neutral-800">
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase ${
-                    app.status === 'Concluído'
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      : app.status === 'Em atendimento'
-                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40'
-                      : app.status === 'Confirmado'
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
-                      : app.status === 'Cancelado'
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                  }`}
-                >
-                  {app.status}
-                </span>
-
-                {app.status !== 'Concluído' && app.status !== 'Cancelado' && (
-                  <>
-                    <button
-                      onClick={() => handleOpenReschedule(app)}
-                      className="py-1.5 px-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-amber-400 text-xs font-mono font-bold uppercase transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Reagendar</span>
-                    </button>
-
-                    <button
-                      onClick={() => updateAppointmentStatus(app.id, 'Cancelado')}
-                      className="py-1.5 px-2.5 rounded-xl bg-neutral-900 hover:bg-red-950/60 text-red-400 border border-neutral-800 text-xs font-mono font-bold uppercase transition-colors cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                  </>
-                )}
-
+              {/* Action Buttons Bar - Complete Set of Requested Buttons */}
+              <div className="pt-3 border-t border-neutral-800 flex flex-wrap items-center gap-2">
+                
+                {/* 1. Confirmar */}
                 <button
-                  onClick={() => deleteAppointment(app.id)}
-                  className="p-2 rounded-xl bg-neutral-900 hover:bg-red-900/40 text-neutral-500 hover:text-red-400 border border-neutral-800 transition-colors cursor-pointer"
-                  title="Excluir do sistema"
+                  onClick={() => updateAppointmentStatus(app.id, 'Confirmado')}
+                  disabled={app.status === 'Confirmado'}
+                  className={`py-2 px-3 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                    app.status === 'Confirmado'
+                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-400/50 cursor-not-allowed opacity-60'
+                      : 'bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border-blue-500/40'
+                  }`}
+                  title="Marcar como Confirmado"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Confirmar</span>
                 </button>
+
+                {/* 2. Iniciar (Em Atendimento) */}
+                <button
+                  onClick={() => updateAppointmentStatus(app.id, 'Em atendimento')}
+                  disabled={app.status === 'Em atendimento'}
+                  className={`py-2 px-3 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                    app.status === 'Em atendimento'
+                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-300/50 cursor-not-allowed opacity-60'
+                      : 'bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border-purple-500/40'
+                  }`}
+                  title="Marcar como Em Atendimento"
+                >
+                  <Play className="w-3.5 h-3.5 text-purple-400 fill-purple-400/30" />
+                  <span>Iniciar</span>
+                </button>
+
+                {/* 3. Concluir */}
+                <button
+                  onClick={() => updateAppointmentStatus(app.id, 'Concluído')}
+                  disabled={app.status === 'Concluído'}
+                  className={`py-2 px-3 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                    app.status === 'Concluído'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400/50 cursor-not-allowed opacity-60'
+                      : 'bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border-emerald-500/40'
+                  }`}
+                  title="Marcar como Concluído"
+                >
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Concluir</span>
+                </button>
+
+                {/* 4. Editar */}
+                <button
+                  onClick={() => handleOpenEdit(app)}
+                  className="py-2 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white border border-neutral-700 text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Editar dados do agendamento"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Editar</span>
+                </button>
+
+                {/* 5. Reagendar */}
+                <button
+                  onClick={() => handleOpenReschedule(app)}
+                  className="py-2 px-3 rounded-xl bg-neutral-900 hover:bg-amber-950/40 text-amber-400 border border-amber-500/30 text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Mudar data e horário"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Reagendar</span>
+                </button>
+
+                {/* 6. Cancelar */}
+                <button
+                  onClick={() => updateAppointmentStatus(app.id, 'Cancelado')}
+                  disabled={app.status === 'Cancelado'}
+                  className={`py-2 px-3 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                    app.status === 'Cancelado'
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-400/50 cursor-not-allowed opacity-60'
+                      : 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border-rose-500/40'
+                  }`}
+                  title="Marcar como Cancelado"
+                >
+                  <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Cancelar</span>
+                </button>
+
+                {/* 7. Excluir */}
+                <button
+                  onClick={() => handleOpenDelete(app)}
+                  className="py-2 px-3 rounded-xl bg-neutral-900 hover:bg-rose-950/80 text-rose-400 border border-neutral-800 hover:border-rose-500/50 text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ml-auto"
+                  title="Excluir permanentemente"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Excluir</span>
+                </button>
+
               </div>
 
             </div>
@@ -379,14 +570,13 @@ export const AdminAgendamentosPage: React.FC = () => {
               </h3>
               <button
                 onClick={() => setIsManualModalOpen(false)}
-                className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900"
+                className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleManualBookingSubmit} className="space-y-4">
-              
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-mono font-bold uppercase text-neutral-300">Nome do Cliente</label>
@@ -527,7 +717,7 @@ export const AdminAgendamentosPage: React.FC = () => {
               </h3>
               <button
                 onClick={() => setIsRescheduleModalOpen(false)}
-                className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900"
+                className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -595,6 +785,185 @@ export const AdminAgendamentosPage: React.FC = () => {
               </button>
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Edit Appointment Modal */}
+      {isEditModalOpen && targetAppointment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg bg-[#111111] border border-neutral-800 rounded-3xl p-6 space-y-4 relative shadow-2xl max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-mono font-bold uppercase text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-amber-400" />
+                Editar Dados do Agendamento
+              </h3>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSubmit} className="space-y-4">
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Nome do Cliente</label>
+                  <input
+                    type="text"
+                    value={editCustomerName}
+                    onChange={(e) => setEditCustomerName(e.target.value)}
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Telefone / WhatsApp</label>
+                  <input
+                    type="tel"
+                    value={editCustomerPhone}
+                    onChange={(e) => setEditCustomerPhone(e.target.value)}
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Barbeiro</label>
+                  <select
+                    value={editBarberId}
+                    onChange={(e) => setEditBarberId(e.target.value)}
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
+                  >
+                    {barbers.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as AppointmentStatus)}
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
+                  >
+                    <option value="Agendado">Agendado</option>
+                    <option value="Confirmado">Confirmado</option>
+                    <option value="Em atendimento">Em atendimento</option>
+                    <option value="Concluído">Concluído</option>
+                    <option value="Cancelado">Cancelado</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Edit Services */}
+              <div className="space-y-2">
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300">Serviços Selecionados</label>
+                <div className="max-h-36 overflow-y-auto space-y-1.5 p-2 bg-black/60 rounded-xl border border-neutral-800">
+                  {services.map((s) => {
+                    const isSelected = editSelectedServiceIds.includes(s.id);
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => toggleEditServiceSelection(s.id)}
+                        className={`p-2 rounded-lg border text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                          isSelected
+                            ? 'bg-amber-500/20 border-amber-500/50 text-white font-bold'
+                            : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white'
+                        }`}
+                      >
+                        <div>
+                          <span>{s.name}</span>
+                          <span className="text-[10px] text-neutral-400 font-mono ml-2">({s.durationMinutes} min)</span>
+                        </div>
+                        <span className="font-mono text-amber-400">R$ {s.price.toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Price & Notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Valor Total (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editCustomPrice}
+                    onChange={(e) => setEditCustomPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Observações</label>
+                  <input
+                    type="text"
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="Notas internas..."
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Salvar Alterações
+              </button>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && targetAppointment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-sm bg-[#111111] border border-rose-500/40 rounded-3xl p-6 space-y-4 relative shadow-2xl text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-mono font-bold text-white uppercase">Excluir Agendamento?</h3>
+              <p className="text-xs text-neutral-400 font-sans">
+                Você tem certeza que deseja remover permanentemente o agendamento de{' '}
+                <strong className="text-white">{targetAppointment.customerName}</strong> para{' '}
+                <strong className="text-amber-400">{targetAppointment.date} às {targetAppointment.startTime}</strong>?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 font-mono text-xs font-bold cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-mono text-xs font-bold uppercase tracking-wider shadow-lg cursor-pointer"
+              >
+                Sim, Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -245,6 +245,18 @@ export interface AdminNotification {
   read: boolean;
 }
 
+export interface WeeklyDayConfig {
+  dayOfWeek: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  dayName: string;
+  active: boolean;
+  startTime: string; // HH:mm
+  endTime: string;   // HH:mm
+  lunchStart: string; // HH:mm
+  lunchEnd: string;   // HH:mm
+  disabledSlots: string[]; // HH:mm array
+  extraSlots: string[];    // HH:mm array
+}
+
 export interface BarbershopInfo {
   name: string;
   shortName?: string;
@@ -264,4 +276,5 @@ export interface BarbershopInfo {
   };
   googleMapsUrl: string;
   logo?: string;
+  weeklySchedule?: WeeklyDayConfig[];
 }

@@ -181,7 +181,7 @@ export const AdminEquipePage: React.FC = () => {
       employmentStatus,
       workingHours: { start: workStart, end: workEnd },
       lunchBreak: { start: lunchStart, end: lunchEnd },
-      workingDays: [1, 2, 3, 4, 5, 6],
+      workingDays: editingBarber?.workingDays || [0, 1, 2, 3, 4, 5, 6],
       notes: notes.trim(),
     };
 

@@ -51,8 +51,14 @@ export async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('offline')) {
-      console.warn('Firebase client offline status:', error.message);
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      msg.includes('offline') ||
+      msg.includes('unavailable') ||
+      msg.includes('Could not reach') ||
+      (error as { code?: string })?.code === 'unavailable'
+    ) {
+      console.warn('Firebase client offline or unavailable status:', msg);
     }
   }
 }

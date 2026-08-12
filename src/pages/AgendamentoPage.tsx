@@ -47,6 +47,8 @@ export const AgendamentoPage: React.FC = () => {
     services,
     appointments,
     coupons,
+    blockedDates,
+    barbershopInfo,
     addAppointment,
     setActivePage,
     addToast,
@@ -217,7 +219,7 @@ export const AgendamentoPage: React.FC = () => {
     const firstDayOfWeek = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const days: ({ day: number; iso: string; isPast: boolean; isToday: boolean } | null)[] = [];
+    const days: ({ day: number; iso: string; isPast: boolean; isToday: boolean; isClosed: boolean; isBlocked: boolean } | null)[] = [];
 
     // Offset blank days
     for (let i = 0; i < firstDayOfWeek; i++) {
@@ -231,11 +233,18 @@ export const AgendamentoPage: React.FC = () => {
         .padStart(2, '0')}`;
       const isPast = iso < todayIso;
       const isToday = iso === todayIso;
-      days.push({ day: d, iso, isPast, isToday });
+
+      const dateObj = new Date(year, month, d);
+      const dow = dateObj.getDay();
+      const dayConfig = barbershopInfo.weeklySchedule?.find((w) => w.dayOfWeek === dow);
+      const isClosed = dayConfig ? !dayConfig.active : false;
+      const isBlocked = blockedDates.some((b) => b.date === iso && !b.barberId);
+
+      days.push({ day: d, iso, isPast, isToday, isClosed, isBlocked });
     }
 
     return days;
-  }, [calendarMonth, todayIso]);
+  }, [calendarMonth, todayIso, barbershopInfo.weeklySchedule, blockedDates]);
 
   // Smart Combo Detection
   const smartComboMatch = useMemo(() => {
@@ -433,9 +442,12 @@ export const AgendamentoPage: React.FC = () => {
       selectedDate,
       selectedBarber,
       effectiveDuration,
-      appointments
+      appointments,
+      undefined,
+      blockedDates,
+      barbershopInfo.weeklySchedule
     );
-  }, [selectedDate, selectedBarber, totalDuration, appointments]);
+  }, [selectedDate, selectedBarber, totalDuration, appointments, blockedDates, barbershopInfo.weeklySchedule]);
 
   // Group slots by shift
   const slotsByShift = useMemo(() => {
@@ -861,18 +873,30 @@ export const AgendamentoPage: React.FC = () => {
                 }
 
                 const isSelected = selectedDate === cell.iso;
+                const isDisabled = cell.isPast || cell.isClosed || cell.isBlocked;
 
                 return (
                   <button
                     key={cell.iso}
-                    disabled={cell.isPast}
+                    disabled={isDisabled}
                     onClick={() => {
                       setSelectedDate(cell.iso);
                       setSelectedTimeSlot(null);
                     }}
+                    title={
+                      cell.isClosed
+                        ? 'Estabelecimento fechado neste dia'
+                        : cell.isBlocked
+                        ? 'Data bloqueada'
+                        : cell.isPast
+                        ? 'Data já passou'
+                        : 'Clique para selecionar'
+                    }
                     className={`h-10 sm:h-11 rounded-xl flex flex-col items-center justify-center relative font-sans transition-all duration-150 ${
                       isSelected
                         ? 'bg-[#DAA520] text-black font-extrabold shadow-md shadow-[#DAA520]/30 scale-105 ring-2 ring-[#DAA520] cursor-pointer'
+                        : cell.isClosed || cell.isBlocked
+                        ? 'bg-rose-500/5 text-rose-400/40 border border-rose-500/10 cursor-not-allowed text-xs opacity-50'
                         : cell.isPast
                         ? 'bg-white/[0.02] text-[#8E9299]/30 cursor-not-allowed border border-transparent line-through text-xs'
                         : cell.isToday
@@ -881,7 +905,12 @@ export const AgendamentoPage: React.FC = () => {
                     }`}
                   >
                     <span className="text-xs sm:text-sm font-bold">{cell.day}</span>
-                    {cell.isToday && !isSelected && (
+                    {(cell.isClosed || cell.isBlocked) && !cell.isPast && (
+                      <span className="text-[7px] text-rose-400/80 uppercase font-extrabold tracking-tighter -mt-0.5">
+                        Fechado
+                      </span>
+                    )}
+                    {cell.isToday && !isSelected && !cell.isClosed && (
                       <span className="w-1 h-1 rounded-full bg-[#DAA520] absolute bottom-1" />
                     )}
                   </button>
@@ -1134,13 +1163,22 @@ export const AgendamentoPage: React.FC = () => {
                               : 'bg-[#111111] text-[#8E9299]/40 border-white/5 cursor-not-allowed opacity-40'
                           }`}
                         >
-                          <span className="text-sm font-bold font-sans">{slot.time}</span>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-sm font-bold font-sans">{slot.time}</span>
+                            {slot.isExtra && (
+                              <span className="text-[8px] px-1 py-0.2 bg-[#DAA520]/20 text-[#DAA520] font-extrabold rounded">
+                                EXTRA
+                              </span>
+                            )}
+                          </div>
                           {!slot.available && (
                             <span className="text-[9px] truncate max-w-full leading-tight text-rose-400/90 font-sans mt-0.5">
-                              {slot.reason === 'Horário de almoço do barbeiro'
+                              {slot.reason === 'Horário de almoço do barbeiro' || slot.reason === 'Horário de almoço do estabelecimento'
                                 ? 'Almoço'
                                 : slot.reason === 'Horário já passou'
                                 ? 'Passou'
+                                : slot.reason?.includes('desativado')
+                                ? 'Bloqueado'
                                 : 'Indisponível'}
                             </span>
                           )}

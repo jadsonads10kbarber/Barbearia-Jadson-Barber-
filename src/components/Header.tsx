@@ -20,7 +20,7 @@ export const Header: React.FC = () => {
       setTapCount(0);
       addToast('Modo de Acesso Administrativo ativado.', 'info');
       if (isAdminLoggedIn) {
-        setActivePage('admin-dashboard');
+        setActivePage('admin-agendamentos');
       } else {
         setActivePage('admin-login');
       }
@@ -67,7 +67,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-2">
           {isAdminLoggedIn && (
             <button
-              onClick={() => setActivePage('admin-dashboard')}
+              onClick={() => setActivePage('admin-agendamentos')}
               className="py-1.5 px-3 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-400 font-mono text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 hover:bg-amber-500/30 transition-colors cursor-pointer"
             >
               <ShieldAlert className="w-3.5 h-3.5" />

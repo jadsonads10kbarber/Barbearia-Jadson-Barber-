@@ -1,4 +1,4 @@
-import { Barber, Appointment } from '../types';
+import { Barber, Appointment, BlockedDate, WeeklyDayConfig } from '../types';
 
 export interface TimeSlot {
   time: string; // '08:00'
@@ -6,6 +6,7 @@ export interface TimeSlot {
   available: boolean;
   reason?: string; // 'Horário de almoço' | 'Já passou' | 'Ocupado' | 'Sem tempo hábil'
   shift: 'MANHÃ' | 'TARDE' | 'NOITE';
+  isExtra?: boolean;
 }
 
 // Convert "HH:mm" to total minutes from midnight
@@ -53,26 +54,55 @@ export function getAvailableSlots(
   barber: Barber | undefined,
   totalDurationMinutes: number, // e.g. 30, 50, 60
   existingAppointments: Appointment[],
-  excludeAppointmentId?: string // used when rescheduling to ignore the current appointment
+  excludeAppointmentId?: string, // used when rescheduling to ignore the current appointment
+  blockedDates: BlockedDate[] = [],
+  weeklySchedule?: WeeklyDayConfig[]
 ): TimeSlot[] {
   if (!barber || totalDurationMinutes <= 0 || !dateStr) {
     return [];
   }
 
+  // 0. Check global blocked dates
+  const isBlocked = blockedDates.some(
+    (b) => b.date === dateStr && (!b.barberId || b.barberId === barber.id)
+  );
+  if (isBlocked) return [];
+
   const duration = Math.max(15, totalDurationMinutes);
-  const selectedDate = new Date(`${dateStr}T00:00:00`);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const selectedDate = new Date(year, month - 1, day);
   const dayOfWeek = selectedDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
 
+  // Check weekly schedule day status (Master Shop Schedule)
+  const dayConfig = weeklySchedule?.find((d) => d.dayOfWeek === dayOfWeek);
+  if (dayConfig && !dayConfig.active) {
+    return []; // Shop is closed on this day
+  }
+
   // Check if barber works on this day of week
-  if (!barber.workingDays.includes(dayOfWeek)) {
-    return []; // Barber is off on this day
+  if (barber.workingDays && barber.workingDays.length > 0) {
+    const isBarberWorking = barber.workingDays.includes(dayOfWeek);
+    const isShopExplicitlyOpen = dayConfig && dayConfig.active;
+    if (!isBarberWorking && !isShopExplicitlyOpen) {
+      return []; // Barber is off on this day
+    }
   }
 
   // Parse barber working hours and lunch break
-  const workStartMin = timeToMinutes(barber.workingHours.start);
-  const workEndMin = timeToMinutes(barber.workingHours.end);
-  const lunchStartMin = timeToMinutes(barber.lunchBreak.start);
-  const lunchEndMin = timeToMinutes(barber.lunchBreak.end);
+  const barberStartMin = timeToMinutes(barber.workingHours.start);
+  const barberEndMin = timeToMinutes(barber.workingHours.end);
+  const barberLunchStartMin = timeToMinutes(barber.lunchBreak.start);
+  const barberLunchEndMin = timeToMinutes(barber.lunchBreak.end);
+
+  // Parse shop hours from weeklySchedule dayConfig
+  const shopStartMin = dayConfig?.startTime ? timeToMinutes(dayConfig.startTime) : barberStartMin;
+  const shopEndMin = dayConfig?.endTime ? timeToMinutes(dayConfig.endTime) : barberEndMin;
+  const shopLunchStartMin = dayConfig?.lunchStart ? timeToMinutes(dayConfig.lunchStart) : null;
+  const shopLunchEndMin = dayConfig?.lunchEnd ? timeToMinutes(dayConfig.lunchEnd) : null;
+
+  // Effective standard candidate bounds
+  const effectiveStartMin = Math.max(barberStartMin, shopStartMin);
+  const effectiveEndMin = Math.min(barberEndMin, shopEndMin);
 
   // Current date and time for past time blocking
   const now = new Date();
@@ -91,37 +121,62 @@ export function getAvailableSlots(
     return true;
   });
 
+  const disabledSlots = dayConfig?.disabledSlots || [];
+  const extraSlots = dayConfig?.extraSlots || [];
+
+  // Generate candidate time strings
+  const candidateTimesSet = new Set<string>();
+  for (let min = effectiveStartMin; min < effectiveEndMin; min += 30) {
+    candidateTimesSet.add(minutesToTime(min));
+  }
+  for (const extra of extraSlots) {
+    candidateTimesSet.add(extra);
+  }
+
+  const sortedTimes = Array.from(candidateTimesSet).sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+
   const slots: TimeSlot[] = [];
 
-  // Generate 30-minute step candidates from workStart to workEnd
-  for (let min = workStartMin; min < workEndMin; min += 30) {
-    const timeStr = minutesToTime(min);
+  for (const timeStr of sortedTimes) {
+    const min = timeToMinutes(timeStr);
     const proposedEndMin = min + duration;
     const proposedEndTimeStr = minutesToTime(proposedEndMin);
     const shift = getShift(timeStr);
+    const isExtra = extraSlots.includes(timeStr);
 
     let available = true;
     let reason = undefined;
 
+    // Disabled explicitly by admin
+    if (disabledSlots.includes(timeStr)) {
+      available = false;
+      reason = 'Horário desativado pelo estabelecimento';
+    }
+
     // 1. Past time check (for today)
-    if (isToday && min <= currentMinutes) {
+    if (available && isToday && min <= currentMinutes) {
       available = false;
       reason = 'Horário já passou';
     }
 
-    // 2. Closing time check (duration must fit before shop closes)
-    if (available && proposedEndMin > workEndMin) {
-      available = false;
-      reason = 'Excede o horário de fechamento';
-    }
-
-    // 3. Lunch break check (entire service duration must not overlap lunch)
+    // 2. Barber Lunch break check
     if (
       available &&
-      checkIntervalOverlap(min, proposedEndMin, lunchStartMin, lunchEndMin)
+      checkIntervalOverlap(min, proposedEndMin, barberLunchStartMin, barberLunchEndMin)
     ) {
       available = false;
       reason = 'Horário de almoço do barbeiro';
+    }
+
+    // 3. Shop Lunch break check (if configured)
+    if (
+      available &&
+      shopLunchStartMin !== null &&
+      shopLunchEndMin !== null &&
+      checkIntervalOverlap(min, proposedEndMin, shopLunchStartMin, shopLunchEndMin)
+    ) {
+      available = false;
+      reason = 'Horário de almoço do estabelecimento';
     }
 
     // 4. Existing appointments collision check
@@ -144,6 +199,7 @@ export function getAvailableSlots(
       available,
       reason,
       shift,
+      isExtra,
     });
   }
 

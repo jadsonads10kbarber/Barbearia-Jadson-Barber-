@@ -1,4 +1,4 @@
-import { Barber, Appointment, BlockedDate } from '../types';
+import { Barber, Appointment, BlockedDate, WeeklyDayConfig } from '../types';
 
 export function timeToMinutes(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
@@ -15,6 +15,7 @@ export interface SlotAvailability {
   time: string; // HH:mm
   available: boolean;
   reason?: string;
+  isExtra?: boolean;
 }
 
 export function getAvailableSlots(
@@ -22,7 +23,8 @@ export function getAvailableSlots(
   barber: Barber | undefined,
   totalDurationMinutes: number,
   existingAppointments: Appointment[],
-  blockedDates: BlockedDate[] = []
+  blockedDates: BlockedDate[] = [],
+  weeklySchedule?: WeeklyDayConfig[]
 ): SlotAvailability[] {
   if (!barber) return [];
 
@@ -37,9 +39,19 @@ export function getAvailableSlots(
   const dateObj = new Date(year, month - 1, day);
   const dayOfWeek = dateObj.getDay();
 
-  // If barber doesn't work on this day of week
-  if (!barber.workingDays.includes(dayOfWeek)) {
+  // Find weekly day config if provided (Master Shop Schedule)
+  const dayConfig = weeklySchedule?.find((d) => d.dayOfWeek === dayOfWeek);
+  if (dayConfig && !dayConfig.active) {
     return [];
+  }
+
+  // If barber doesn't work on this day of week
+  if (barber.workingDays && barber.workingDays.length > 0) {
+    const isBarberWorking = barber.workingDays.includes(dayOfWeek);
+    const isShopExplicitlyOpen = dayConfig && dayConfig.active;
+    if (!isBarberWorking && !isShopExplicitlyOpen) {
+      return [];
+    }
   }
 
   // If barber has an explicit off day on this date
@@ -52,10 +64,18 @@ export function getAvailableSlots(
     return [];
   }
 
-  const startMins = timeToMinutes(barber.workingHours.start);
-  const endMins = timeToMinutes(barber.workingHours.end);
-  const lunchStartMins = timeToMinutes(barber.lunchBreak.start);
-  const lunchEndMins = timeToMinutes(barber.lunchBreak.end);
+  const barberStartMins = timeToMinutes(barber.workingHours.start);
+  const barberEndMins = timeToMinutes(barber.workingHours.end);
+  const barberLunchStartMins = timeToMinutes(barber.lunchBreak.start);
+  const barberLunchEndMins = timeToMinutes(barber.lunchBreak.end);
+
+  const shopStartMins = dayConfig?.startTime ? timeToMinutes(dayConfig.startTime) : barberStartMins;
+  const shopEndMins = dayConfig?.endTime ? timeToMinutes(dayConfig.endTime) : barberEndMins;
+  const shopLunchStartMins = dayConfig?.lunchStart ? timeToMinutes(dayConfig.lunchStart) : null;
+  const shopLunchEndMins = dayConfig?.lunchEnd ? timeToMinutes(dayConfig.lunchEnd) : null;
+
+  const effectiveStartMins = Math.max(barberStartMins, shopStartMins);
+  const effectiveEndMins = Math.min(barberEndMins, shopEndMins);
 
   // Filter active appointments for this barber on this date
   const dayAppointments = existingAppointments.filter(
@@ -65,43 +85,64 @@ export function getAvailableSlots(
       app.status !== 'Cancelado'
   );
 
+  const disabledSlots = dayConfig?.disabledSlots || [];
+  const extraSlots = dayConfig?.extraSlots || [];
+
+  // Gather candidate times
+  const candidateTimesSet = new Set<string>();
+  for (let mins = effectiveStartMins; mins <= effectiveEndMins - totalDurationMinutes; mins += 30) {
+    candidateTimesSet.add(minutesToTime(mins));
+  }
+  for (const extra of extraSlots) {
+    candidateTimesSet.add(extra);
+  }
+
+  const sortedTimes = Array.from(candidateTimesSet).sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+
   const slots: SlotAvailability[] = [];
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const currentMins = now.getHours() * 60 + now.getMinutes();
 
-  // Generate slots every 30 minutes
-  for (let mins = startMins; mins <= endMins - totalDurationMinutes; mins += 30) {
-    const timeStr = minutesToTime(mins);
+  for (const timeStr of sortedTimes) {
+    const mins = timeToMinutes(timeStr);
     const slotEndMins = mins + totalDurationMinutes;
+    const isExtra = extraSlots.includes(timeStr);
+
+    // Check if explicitly disabled by admin
+    if (disabledSlots.includes(timeStr)) {
+      slots.push({ time: timeStr, available: false, reason: 'Horário desativado pelo estabelecimento', isExtra });
+      continue;
+    }
 
     // A. Past time check for today
     if (date === todayStr && mins <= currentMins) {
-      slots.push({ time: timeStr, available: false, reason: 'Horário já passou' });
+      slots.push({ time: timeStr, available: false, reason: 'Horário já passou', isExtra });
       continue;
     }
 
-    // B. Exceeds working hours check
-    if (slotEndMins > endMins) {
-      slots.push({ time: timeStr, available: false, reason: 'Excede o horário de fechamento' });
+    // B. Barber Lunch break overlap check
+    const overlapsBarberLunch = mins < barberLunchEndMins && slotEndMins > barberLunchStartMins;
+    if (overlapsBarberLunch) {
+      slots.push({ time: timeStr, available: false, reason: 'Horário de almoço do barbeiro', isExtra });
       continue;
     }
 
-    // C. Lunch break overlap check (CRITICAL requirement 34)
-    // Slot overlaps lunch if slotStart < lunchEnd AND slotEnd > lunchStart
-    const overlapsLunch = mins < lunchEndMins && slotEndMins > lunchStartMins;
-    if (overlapsLunch) {
-      slots.push({ time: timeStr, available: false, reason: 'Horário de almoço do barbeiro' });
-      continue;
+    // C. Shop Lunch break overlap check
+    if (shopLunchStartMins !== null && shopLunchEndMins !== null) {
+      const overlapsShopLunch = mins < shopLunchEndMins && slotEndMins > shopLunchStartMins;
+      if (overlapsShopLunch) {
+        slots.push({ time: timeStr, available: false, reason: 'Horário de almoço do estabelecimento', isExtra });
+        continue;
+      }
     }
 
-    // D. Existing appointment collision check
+    // C. Existing appointment collision check
     let hasCollision = false;
     for (const app of dayAppointments) {
       const appStartMins = timeToMinutes(app.startTime);
       const appEndMins = timeToMinutes(app.endTime);
 
-      // Overlap condition: slotStart < appEnd AND slotEnd > appStart
       if (mins < appEndMins && slotEndMins > appStartMins) {
         hasCollision = true;
         break;
@@ -109,12 +150,12 @@ export function getAvailableSlots(
     }
 
     if (hasCollision) {
-      slots.push({ time: timeStr, available: false, reason: 'Horário já reservado' });
+      slots.push({ time: timeStr, available: false, reason: 'Horário já reservado', isExtra });
       continue;
     }
 
     // Available!
-    slots.push({ time: timeStr, available: true });
+    slots.push({ time: timeStr, available: true, isExtra });
   }
 
   return slots;

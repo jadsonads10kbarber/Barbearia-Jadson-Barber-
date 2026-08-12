@@ -20,7 +20,7 @@ export const AdminLoginPage: React.FC = () => {
     try {
       const success = await loginAdmin(email, password);
       if (success) {
-        setActivePage('admin-dashboard');
+        setActivePage('admin-agendamentos');
       }
     } finally {
       setIsLoading(false);
