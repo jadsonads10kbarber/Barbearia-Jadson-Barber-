@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function for admin check
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'barbeariajadsonbarber@gmail.com' ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+      );
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Admin Users
+    match /adminUsers/{userId} {
+      allow read, write: if true;
+    }
+
+    // Barbers collection
+    match /barbers/{barberId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Services collection
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Feed collection
+    match /feed/{postId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Appointments collection
+    match /appointments/{appointmentId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Customers collection
+    match /customers/{customerId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Inventory / Insumos
+    match /inventory/{itemId} {
+      allow read, write: if true;
+    }
+
+    // Products / Venda
+    match /products/{productId} {
+      allow read, write: if true;
+    }
+
+    // Sales / Vendas
+    match /sales/{saleId} {
+      allow read, write: if true;
+    }
+
+    // Financial Transactions / Financeiro
+    match /financialTransactions/{txId} {
+      allow read, write: if true;
+    }
+
+    // Coupons
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Reviews
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Blocked Dates
+    match /blockedDates/{dateId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Settings / Barbershop Info
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Admin Logs
+    match /adminLogs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Notifications
+    match /notifications/{notifId} {
+      allow read, write: if true;
+    }
+  }
+}

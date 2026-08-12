@@ -1,0 +1,8 @@
+{
+  "name": "Barbearia Jadson Barber",
+  "description": "Aplicativo de agendamento online e Painel Administrativo da Barbearia Jadson Barber",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

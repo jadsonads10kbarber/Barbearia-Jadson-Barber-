@@ -1,0 +1,1534 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+} from 'firebase/firestore';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import {
+  Barber,
+  ServiceItem,
+  Appointment,
+  FeedPost,
+  BarbershopInfo,
+  AppointmentStatus,
+  AppointmentService,
+  UserAccount,
+  Customer,
+  InsumoItem,
+  SaleProduct,
+  SaleTransaction,
+  ExpenseItem,
+  Coupon,
+  BlockedDate,
+  Review,
+  AdminNotification,
+  AdminLog,
+} from '../types';
+import {
+  initialBarbers,
+  initialServices,
+  initialFeedPosts,
+  initialBarbershopInfo,
+  sampleAppointments,
+  initialCustomers,
+  initialInsumos,
+  initialSaleProducts,
+  initialExpenses,
+  initialCoupons,
+  initialBlockedDates,
+  initialReviews,
+  initialNotifications,
+} from '../data/initialData';
+
+export type ActivePage =
+  | 'agenda'
+  | 'meus-agendamentos'
+  | 'feed'
+  | 'barbearia'
+  | 'servicos'
+  | 'barbeiros'
+  | 'perfil'
+  | 'cupons'
+  | 'login'
+  | 'admin-login'
+  | 'admin-dashboard'
+  | 'admin-financeiro'
+  | 'admin-agendamentos'
+  | 'admin-feed'
+  | 'admin-equipe'
+  | 'admin-clientes'
+  | 'admin-servicos'
+  | 'admin-estoque'
+  | 'admin-produtos'
+  | 'admin-cupons'
+  | 'admin-horarios'
+  | 'admin-avaliacoes'
+  | 'admin-configuracoes';
+
+interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  text: string;
+}
+
+interface AppContextType {
+  activePage: ActivePage;
+  setActivePage: (page: ActivePage) => void;
+  barbershopInfo: BarbershopInfo;
+  barbers: Barber[];
+  services: ServiceItem[];
+  feedPosts: FeedPost[];
+  appointments: Appointment[];
+  customers: Customer[];
+  insumos: InsumoItem[];
+  products: SaleProduct[];
+  expenses: ExpenseItem[];
+  coupons: Coupon[];
+  blockedDates: BlockedDate[];
+  reviews: Review[];
+  sales: SaleTransaction[];
+  notifications: AdminNotification[];
+  adminLogs: AdminLog[];
+
+  customerName: string;
+  setCustomerName: (name: string) => void;
+  customerPhone: string;
+  setCustomerPhone: (phone: string) => void;
+
+  // Client Auth
+  isLoggedIn: boolean;
+  currentUser: UserAccount | null;
+  login: (emailOrPhone: string, password?: string) => Promise<boolean>;
+  registerUser: (name: string, phone: string, email: string, password?: string) => Promise<boolean>;
+  logout: () => void;
+  updateProfile: (updatedData: Partial<UserAccount>) => void;
+
+  // Admin Auth
+  isAdminLoggedIn: boolean;
+  adminUser: UserAccount | null;
+  loginAdmin: (email: string, pass: string) => Promise<boolean>;
+  logoutAdmin: () => void;
+
+  // Pre-selection helper
+  selectedBarberForBooking?: Barber;
+  setSelectedBarberForBooking: (barber: Barber | undefined) => void;
+
+  // Appointment actions
+  addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Promise<Appointment>;
+  updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => Promise<boolean>;
+  cancelAppointment: (appointmentId: string) => Promise<boolean>;
+  rescheduleAppointment: (
+    appointmentId: string,
+    newDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    newBarberId: string,
+    newBarberName: string
+  ) => Promise<boolean>;
+  updateAppointmentServices: (
+    appointmentId: string,
+    newServices: AppointmentService[],
+    newTotalPrice: number,
+    newTotalDuration: number,
+    isCombo: boolean
+  ) => Promise<boolean>;
+  updateAppointment: (
+    appointmentId: string,
+    updatedData: Partial<Appointment>
+  ) => Promise<boolean>;
+  deleteAppointment: (appointmentId: string) => Promise<boolean>;
+  clearHistory: () => Promise<boolean>;
+
+  // Barber actions
+  addBarber: (barber: Omit<Barber, 'id'>) => Promise<boolean>;
+  updateBarber: (id: string, data: Partial<Barber>) => Promise<boolean>;
+  deleteBarber: (id: string) => Promise<boolean>;
+
+  // Service & Combo actions
+  addService: (service: Omit<ServiceItem, 'id'>) => Promise<boolean>;
+  updateService: (id: string, data: Partial<ServiceItem>) => Promise<boolean>;
+  deleteService: (id: string) => Promise<boolean>;
+
+  // Feed actions
+  toggleLikePost: (postId: string) => void;
+  addFeedPost: (post: Omit<FeedPost, 'id' | 'date' | 'likesCount'>) => Promise<boolean>;
+  updateFeedPost: (id: string, data: Partial<FeedPost>) => Promise<boolean>;
+  deleteFeedPost: (id: string) => Promise<boolean>;
+
+  // Customer actions
+  updateCustomer: (id: string, data: Partial<Customer>) => Promise<boolean>;
+
+  // Insumo / Stock actions
+  addInsumo: (item: Omit<InsumoItem, 'id'>) => Promise<boolean>;
+  updateInsumo: (id: string, data: Partial<InsumoItem>) => Promise<boolean>;
+  deleteInsumo: (id: string) => Promise<boolean>;
+
+  // Sale Product actions
+  addProduct: (product: Omit<SaleProduct, 'id' | 'salesCount' | 'totalRevenue'>) => Promise<boolean>;
+  updateProduct: (id: string, data: Partial<SaleProduct>) => Promise<boolean>;
+  deleteProduct: (id: string) => Promise<boolean>;
+  recordSale: (saleData: {
+    customerName: string;
+    customerPhone: string;
+    productId: string;
+    quantity: number;
+    paymentMethod: string;
+  }) => Promise<boolean>;
+
+  // Expense actions
+  addExpense: (expense: Omit<ExpenseItem, 'id'>) => Promise<boolean>;
+  deleteExpense: (id: string) => Promise<boolean>;
+
+  // Coupon actions
+  addCoupon: (coupon: Omit<Coupon, 'id' | 'usedCount'>) => Promise<boolean>;
+  updateCoupon: (id: string, data: Partial<Coupon>) => Promise<boolean>;
+  deleteCoupon: (id: string) => Promise<boolean>;
+
+  // Blocked Dates actions
+  addBlockedDate: (blocked: Omit<BlockedDate, 'id'>) => Promise<boolean>;
+  deleteBlockedDate: (id: string) => Promise<boolean>;
+
+  // Review actions
+  addReview: (review: Omit<Review, 'id' | 'date' | 'status'>) => Promise<boolean>;
+  updateReviewStatus: (id: string, status: 'Visível' | 'Oculto') => Promise<boolean>;
+  deleteReview: (id: string) => Promise<boolean>;
+
+  // Settings
+  updateSettings: (newSettings: Partial<BarbershopInfo>) => Promise<boolean>;
+
+  // Notifications
+  markNotificationRead: (id: string) => void;
+  clearNotifications: () => void;
+
+  // Toast System
+  toasts: ToastMessage[];
+  addToast: (text: string, type?: 'success' | 'error' | 'info') => void;
+  removeToast: (id: string) => void;
+
+  // Drawer / Sidebar state
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: (open: boolean) => void;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const LOCAL_STORAGE_CUSTOMER_KEY = 'jadson_customer';
+const LOCAL_STORAGE_USER_KEY = 'jadson_logged_user';
+const LOCAL_STORAGE_ADMIN_USER_KEY = 'jadson_admin_logged_user';
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [activePage, setActivePage] = useState<ActivePage>('agenda');
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+
+  // Core collections state initialized with default values, synced in real-time with Firestore
+  const [barbershopInfo, setBarbershopInfo] = useState<BarbershopInfo>(initialBarbershopInfo);
+  const [barbers, setBarbers] = useState<Barber[]>(initialBarbers);
+  const [services, setServices] = useState<ServiceItem[]>(initialServices);
+  const [feedPosts, setFeedPosts] = useState<FeedPost[]>(initialFeedPosts);
+  const [appointments, setAppointments] = useState<Appointment[]>(sampleAppointments);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [insumos, setInsumos] = useState<InsumoItem[]>(initialInsumos);
+  const [products, setProducts] = useState<SaleProduct[]>(initialSaleProducts);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>(initialExpenses);
+  const [coupons, setCoupons] = useState<Coupon[]>(initialCoupons);
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>(initialBlockedDates);
+  const [reviews, setReviews] = useState<Review[]>(initialReviews);
+  const [sales, setSales] = useState<SaleTransaction[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>(initialNotifications);
+  const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
+
+  const [selectedBarberForBooking, setSelectedBarberForBooking] = useState<Barber | undefined>();
+
+  // Toasts State
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now().toString() + Math.random().toString().slice(2, 5);
+    setToasts((prev) => [...prev, { id, text, type }]);
+    setTimeout(() => {
+      removeToast(id);
+    }, 4000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Logged in Client User
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Error loading user from localStorage', e);
+    }
+    return null;
+  });
+
+  const isLoggedIn = Boolean(currentUser);
+
+  // Logged in Admin User
+  const [adminUser, setAdminUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_ADMIN_USER_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Error loading admin user', e);
+    }
+    return null;
+  });
+
+  const isAdminLoggedIn = Boolean(adminUser && adminUser.role === 'admin');
+
+  // Customer info state
+  const [customerName, setCustomerNameState] = useState<string>(() => {
+    if (currentUser?.name) return currentUser.name;
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_CUSTOMER_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.name || 'Cliente Jadson Barber';
+      }
+    } catch (e) {
+      // fallback
+    }
+    return 'Cliente Jadson Barber';
+  });
+
+  const [customerPhone, setCustomerPhoneState] = useState<string>(() => {
+    if (currentUser?.phone) return currentUser.phone;
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_CUSTOMER_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.phone || '(11) 99999-8888';
+      }
+    } catch (e) {
+      // fallback
+    }
+    return '(11) 99999-8888';
+  });
+
+  // Attach Firestore Realtime Listeners
+  useEffect(() => {
+    let unsubs: (() => void)[] = [];
+
+    try {
+      // 1. Appointments listener
+      const apptsUnsub = onSnapshot(
+        collection(db, 'appointments'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Appointment[] = [];
+            snapshot.forEach((d) => {
+              list.push({ id: d.id, ...d.data() } as Appointment);
+            });
+            // Sort by date/startTime desc
+            list.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
+            setAppointments(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'appointments')
+      );
+      unsubs.push(apptsUnsub);
+
+      // 2. Services listener
+      const servUnsub = onSnapshot(
+        collection(db, 'services'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: ServiceItem[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as ServiceItem));
+            setServices(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'services')
+      );
+      unsubs.push(servUnsub);
+
+      // 3. Barbers listener
+      const barbUnsub = onSnapshot(
+        collection(db, 'barbers'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Barber[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Barber));
+            setBarbers(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'barbers')
+      );
+      unsubs.push(barbUnsub);
+
+      // 4. Feed listener
+      const feedUnsub = onSnapshot(
+        collection(db, 'feed'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: FeedPost[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as FeedPost));
+            setFeedPosts(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'feed')
+      );
+      unsubs.push(feedUnsub);
+
+      // 5. Customers listener
+      const custUnsub = onSnapshot(
+        collection(db, 'customers'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Customer[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Customer));
+            setCustomers(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
+      );
+      unsubs.push(custUnsub);
+
+      // 6. Insumos listener
+      const insUnsub = onSnapshot(
+        collection(db, 'inventory'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: InsumoItem[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as InsumoItem));
+            setInsumos(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'inventory')
+      );
+      unsubs.push(insUnsub);
+
+      // 7. Sale Products listener
+      const prodUnsub = onSnapshot(
+        collection(db, 'products'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: SaleProduct[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as SaleProduct));
+            setProducts(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'products')
+      );
+      unsubs.push(prodUnsub);
+
+      // 8. Expenses listener
+      const expUnsub = onSnapshot(
+        collection(db, 'financialTransactions'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: ExpenseItem[] = [];
+            snapshot.forEach((d) => {
+              const data = d.data();
+              if (data.type === 'expense' || data.amount) {
+                list.push({ id: d.id, ...data } as ExpenseItem);
+              }
+            });
+            setExpenses(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'financialTransactions')
+      );
+      unsubs.push(expUnsub);
+
+      // 9. Coupons listener
+      const coupUnsub = onSnapshot(
+        collection(db, 'coupons'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Coupon[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Coupon));
+            setCoupons(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'coupons')
+      );
+      unsubs.push(coupUnsub);
+
+      // 10. Blocked Dates listener
+      const blockUnsub = onSnapshot(
+        collection(db, 'blockedDates'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: BlockedDate[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as BlockedDate));
+            setBlockedDates(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'blockedDates')
+      );
+      unsubs.push(blockUnsub);
+
+      // 11. Reviews listener
+      const revUnsub = onSnapshot(
+        collection(db, 'reviews'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Review[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Review));
+            setReviews(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'reviews')
+      );
+      unsubs.push(revUnsub);
+
+      // 12. Settings listener
+      const setUnsub = onSnapshot(
+        doc(db, 'settings', 'barbershopInfo'),
+        (docSnap) => {
+          if (docSnap.exists()) {
+            setBarbershopInfo(docSnap.data() as BarbershopInfo);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.GET, 'settings/barbershopInfo')
+      );
+      unsubs.push(setUnsub);
+
+      // 13. Notifications listener
+      const notifUnsub = onSnapshot(
+        collection(db, 'notifications'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: AdminNotification[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AdminNotification));
+            setNotifications(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'notifications')
+      );
+      unsubs.push(notifUnsub);
+
+      // 14. Logs listener
+      const logsUnsub = onSnapshot(
+        collection(db, 'adminLogs'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: AdminLog[] = [];
+            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AdminLog));
+            list.sort((a, b) => b.date.localeCompare(a.date));
+            setAdminLogs(list);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'adminLogs')
+      );
+      unsubs.push(logsUnsub);
+    } catch (e) {
+      console.warn('Realtime listeners running with offline/fallback state:', e);
+    }
+
+    return () => {
+      unsubs.forEach((fn) => fn());
+    };
+  }, []);
+
+  // Helper to record admin log
+  const addAdminLog = async (action: string, details: string, previousData?: any, newData?: any) => {
+    try {
+      const newLog: Omit<AdminLog, 'id'> = {
+        adminEmail: adminUser?.email || 'barbeariajadsonbarber@gmail.com',
+        action,
+        date: new Date().toISOString(),
+        details,
+        previousData: previousData || null,
+        newData: newData || null,
+      };
+      await addDoc(collection(db, 'adminLogs'), newLog);
+    } catch (e) {
+      console.error('Error logging admin action:', e);
+    }
+  };
+
+  // Helper to create admin notification
+  const addNotification = async (type: AdminNotification['type'], title: string, message: string) => {
+    try {
+      const notif: Omit<AdminNotification, 'id'> = {
+        type,
+        title,
+        message,
+        date: new Date().toLocaleString('pt-BR'),
+        read: false,
+      };
+      await addDoc(collection(db, 'notifications'), notif);
+    } catch (e) {
+      console.error('Error creating notification:', e);
+    }
+  };
+
+  // CLIENT AUTH
+  const login = async (emailOrPhone: string, _password?: string): Promise<boolean> => {
+    const isEmail = emailOrPhone.includes('@');
+    const user: UserAccount = {
+      id: `usr-${Date.now()}`,
+      name: currentUser?.name || (isEmail ? emailOrPhone.split('@')[0] : 'Cliente Jadson Barber'),
+      email: isEmail ? emailOrPhone : 'cliente@jadsonbarber.com.br',
+      phone: !isEmail ? emailOrPhone : '(11) 98765-4321',
+      createdAt: new Date().toISOString(),
+      role: 'client',
+    };
+
+    setCurrentUser(user);
+    setCustomerNameState(user.name);
+    setCustomerPhoneState(user.phone);
+    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+    addToast(`Bem-vindo, ${user.name}! Login realizado com sucesso.`, 'success');
+    return true;
+  };
+
+  const registerUser = async (
+    name: string,
+    phone: string,
+    email: string,
+    _password?: string
+  ): Promise<boolean> => {
+    const newUser: UserAccount = {
+      id: `usr-${Date.now()}`,
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
+      createdAt: new Date().toISOString(),
+      role: 'client',
+    };
+
+    setCurrentUser(newUser);
+    setCustomerNameState(newUser.name);
+    setCustomerPhoneState(newUser.phone);
+    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newUser));
+
+    // Sync with Firestore customers collection
+    try {
+      await setDoc(doc(db, 'customers', newUser.id), {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        phone: newUser.phone,
+        createdAt: newUser.createdAt,
+        totalAppointments: 0,
+        totalSpent: 0,
+        status: 'ativo',
+      });
+      addNotification('cliente', 'Novo Cliente Cadastrado', `${newUser.name} se cadastrou no aplicativo.`);
+    } catch (e) {
+      console.warn('Customer saved locally', e);
+    }
+
+    addToast(`Conta criada com sucesso! Seja bem-vindo, ${newUser.name}.`, 'success');
+    return true;
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    addToast('Você saiu da sua conta.', 'info');
+    setActivePage('agenda');
+  };
+
+  const updateProfile = (updatedData: Partial<UserAccount>) => {
+    if (!currentUser) return;
+    const updated = { ...currentUser, ...updatedData };
+    setCurrentUser(updated);
+    if (updated.name) setCustomerNameState(updated.name);
+    if (updated.phone) setCustomerPhoneState(updated.phone);
+    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updated));
+    addToast('Perfil atualizado com sucesso!', 'success');
+  };
+
+  // ADMIN AUTH
+  const loginAdmin = async (email: string, pass: string): Promise<boolean> => {
+    const cleanEmail = email.trim().toLowerCase();
+    
+    // Check credentials against admin account rules
+    if (cleanEmail === 'barbeariajadsonbarber@gmail.com' && pass === 'Barbearia25*') {
+      try {
+        // Authenticate with Firebase Auth if possible, or fallback safely
+        try {
+          await signInWithEmailAndPassword(auth, cleanEmail, pass);
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential') {
+            try {
+              await createUserWithEmailAndPassword(auth, cleanEmail, pass);
+            } catch (createErr) {
+              // fallback
+            }
+          }
+        }
+
+        const adminAcc: UserAccount = {
+          id: auth.currentUser?.uid || 'admin-master',
+          email: cleanEmail,
+          name: 'Administrador Jadson Barber',
+          phone: '(11) 99999-1010',
+          createdAt: new Date().toISOString(),
+          role: 'admin',
+        };
+
+        setAdminUser(adminAcc);
+        localStorage.setItem(LOCAL_STORAGE_ADMIN_USER_KEY, JSON.stringify(adminAcc));
+        
+        // Log action
+        addAdminLog('Login Administrativo', 'Administrador autenticado no painel.');
+        addToast('Acesso administrativo concedido. Bem-vindo!', 'success');
+        setActivePage('admin-agendamentos');
+        return true;
+      } catch (e) {
+        console.error('Admin login error:', e);
+      }
+    }
+
+    addToast('Credenciais administrativas incorretas.', 'error');
+    return false;
+  };
+
+  const logoutAdmin = () => {
+    firebaseSignOut(auth).catch(() => {});
+    setAdminUser(null);
+    localStorage.removeItem(LOCAL_STORAGE_ADMIN_USER_KEY);
+    addToast('Sessão administrativa encerrada.', 'info');
+    setActivePage('agenda');
+  };
+
+  const setCustomerName = (name: string) => {
+    setCustomerNameState(name);
+    localStorage.setItem(
+      LOCAL_STORAGE_CUSTOMER_KEY,
+      JSON.stringify({ name, phone: customerPhone })
+    );
+  };
+
+  const setCustomerPhone = (phone: string) => {
+    setCustomerPhoneState(phone);
+    localStorage.setItem(
+      LOCAL_STORAGE_CUSTOMER_KEY,
+      JSON.stringify({ name: customerName, phone })
+    );
+  };
+
+  // APPOINTMENT ACTIONS (Client + Admin)
+  const addAppointment = async (
+    appointmentData: Omit<Appointment, 'id' | 'createdAt'>
+  ): Promise<Appointment> => {
+    const newId = `app-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newAppointment: Appointment = {
+      ...appointmentData,
+      id: newId,
+      createdAt: new Date().toISOString(),
+    };
+
+    setAppointments((prev) => [newAppointment, ...prev]);
+
+    // Save to Firestore
+    try {
+      await setDoc(doc(db, 'appointments', newId), newAppointment);
+      addNotification(
+        'agendamento',
+        'Novo Agendamento',
+        `${newAppointment.customerName} agendou para ${newAppointment.date} às ${newAppointment.startTime} com ${newAppointment.barberName}.`
+      );
+    } catch (e) {
+      console.warn('Appointment saved locally:', e);
+    }
+
+    return newAppointment;
+  };
+
+  const updateAppointmentStatus = async (appointmentId: string, status: AppointmentStatus): Promise<boolean> => {
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === appointmentId ? { ...a, status, updatedAt: new Date().toISOString() } : a))
+    );
+
+    try {
+      await updateDoc(doc(db, 'appointments', appointmentId), {
+        status,
+        updatedAt: new Date().toISOString(),
+      });
+      addAdminLog('Alteração de Status de Agendamento', `Agendamento ${appointmentId} alterado para ${status}.`);
+      addToast(`Agendamento atualizado para "${status}".`, 'success');
+      return true;
+    } catch (e) {
+      addToast('Status atualizado localmente.', 'info');
+      return true;
+    }
+  };
+
+  const cancelAppointment = async (appointmentId: string): Promise<boolean> => {
+    const target = appointments.find((a) => a.id === appointmentId);
+    setAppointments((prev) =>
+      prev.map((app) => {
+        if (app.id === appointmentId) {
+          return {
+            ...app,
+            status: 'Cancelado' as AppointmentStatus,
+            cancelledAt: new Date().toISOString(),
+          };
+        }
+        return app;
+      })
+    );
+
+    try {
+      await updateDoc(doc(db, 'appointments', appointmentId), {
+        status: 'Cancelado',
+        cancelledAt: new Date().toISOString(),
+      });
+      if (target) {
+        addNotification(
+          'cancelamento',
+          'Agendamento Cancelado',
+          `O agendamento de ${target.customerName} para ${target.date} às ${target.startTime} foi cancelado.`
+        );
+      }
+    } catch (e) {
+      console.warn('Cancellation updated locally', e);
+    }
+
+    addToast('Agendamento cancelado com sucesso.', 'info');
+    return true;
+  };
+
+  const rescheduleAppointment = async (
+    appointmentId: string,
+    newDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    newBarberId: string,
+    newBarberName: string
+  ): Promise<boolean> => {
+    let target = appointments.find((a) => a.id === appointmentId);
+    if (!target) return false;
+
+    const historyItem = {
+      previousDate: target.date,
+      previousTime: target.startTime,
+      changedAt: new Date().toISOString(),
+    };
+    const updatedHistory = [...(target.rescheduleHistory || []), historyItem];
+
+    const updatedData = {
+      date: newDate,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      barberId: newBarberId,
+      barberName: newBarberName,
+      status: 'Agendado' as AppointmentStatus,
+      updatedAt: new Date().toISOString(),
+      rescheduleHistory: updatedHistory,
+    };
+
+    setAppointments((prev) =>
+      prev.map((app) => (app.id === appointmentId ? { ...app, ...updatedData } : app))
+    );
+
+    try {
+      await updateDoc(doc(db, 'appointments', appointmentId), updatedData);
+      addNotification(
+        'reagendamento',
+        'Agendamento Reagendado',
+        `${target.customerName} reagendou para ${newDate} às ${newStartTime} com ${newBarberName}.`
+      );
+    } catch (e) {
+      console.warn('Reschedule saved locally', e);
+    }
+
+    addToast('Agendamento reagendado com sucesso!', 'success');
+    return true;
+  };
+
+  const updateAppointmentServices = async (
+    appointmentId: string,
+    newServices: AppointmentService[],
+    newTotalPrice: number,
+    newTotalDuration: number,
+    isCombo: boolean
+  ): Promise<boolean> => {
+    const updatedData = {
+      services: newServices,
+      totalPrice: newTotalPrice,
+      totalDuration: newTotalDuration,
+      isCombo,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAppointments((prev) =>
+      prev.map((app) => (app.id === appointmentId ? { ...app, ...updatedData } : app))
+    );
+
+    try {
+      await updateDoc(doc(db, 'appointments', appointmentId), updatedData);
+    } catch (e) {
+      console.warn('Services updated locally', e);
+    }
+
+    addToast('Serviços do agendamento atualizados.', 'success');
+    return true;
+  };
+
+  const updateAppointment = async (
+    appointmentId: string,
+    updatedData: Partial<Appointment>
+  ): Promise<boolean> => {
+    const dataWithTimestamp = {
+      ...updatedData,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAppointments((prev) =>
+      prev.map((app) => (app.id === appointmentId ? { ...app, ...dataWithTimestamp } : app))
+    );
+
+    try {
+      await updateDoc(doc(db, 'appointments', appointmentId), dataWithTimestamp);
+      addAdminLog('Edição de Agendamento', `Agendamento ${appointmentId} atualizado.`);
+    } catch (e) {
+      console.warn('Appointment updated locally', e);
+    }
+
+    addToast('Agendamento atualizado com sucesso.', 'success');
+    return true;
+  };
+
+  const deleteAppointment = async (appointmentId: string): Promise<boolean> => {
+    setAppointments((prev) => prev.filter((app) => app.id !== appointmentId));
+    try {
+      await deleteDoc(doc(db, 'appointments', appointmentId));
+    } catch (e) {
+      console.warn('Deleted locally', e);
+    }
+    addToast('Agendamento removido com sucesso.', 'info');
+    return true;
+  };
+
+  const clearHistory = async (): Promise<boolean> => {
+    const today = new Date().toISOString().split('T')[0];
+    setAppointments((prev) =>
+      prev.filter((app) => app.status !== 'Cancelado' && app.status !== 'Concluído' && app.date >= today)
+    );
+    addToast('Histórico antigo limpo com sucesso.', 'success');
+    return true;
+  };
+
+  // BARBERS CRUD
+  const addBarber = async (barberData: Omit<Barber, 'id'>): Promise<boolean> => {
+    const newId = `barber-${Date.now()}`;
+    const newBarber: Barber = { ...barberData, id: newId };
+    setBarbers((prev) => [...prev, newBarber]);
+
+    try {
+      await setDoc(doc(db, 'barbers', newId), newBarber);
+      addAdminLog('Adicionar Barbeiro', `Barbeiro ${newBarber.name} cadastrado na equipe.`);
+    } catch (e) {
+      console.warn('Barber saved locally', e);
+    }
+
+    addToast('Barbeiro adicionado com sucesso!', 'success');
+    return true;
+  };
+
+  const updateBarber = async (id: string, data: Partial<Barber>): Promise<boolean> => {
+    setBarbers((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
+
+    try {
+      await updateDoc(doc(db, 'barbers', id), data);
+      addAdminLog('Editar Barbeiro', `Dados do barbeiro ID ${id} atualizados.`);
+    } catch (e) {
+      console.warn('Barber updated locally', e);
+    }
+
+    addToast('Dados do barbeiro atualizados.', 'success');
+    return true;
+  };
+
+  const deleteBarber = async (id: string): Promise<boolean> => {
+    setBarbers((prev) => prev.filter((b) => b.id !== id));
+    try {
+      await deleteDoc(doc(db, 'barbers', id));
+      addAdminLog('Excluir Barbeiro', `Barbeiro ID ${id} removido.`);
+    } catch (e) {
+      console.warn('Barber deleted locally', e);
+    }
+    addToast('Barbeiro removido.', 'info');
+    return true;
+  };
+
+  // SERVICES CRUD
+  const addService = async (serviceData: Omit<ServiceItem, 'id'>): Promise<boolean> => {
+    const newId = serviceData.category === 'combo' ? `combo-${Date.now()}` : `serv-${Date.now()}`;
+    const newService: ServiceItem = { ...serviceData, id: newId, status: serviceData.status || 'ativo' };
+    setServices((prev) => [...prev, newService]);
+
+    try {
+      await setDoc(doc(db, 'services', newId), newService);
+      addAdminLog('Adicionar Serviço', `Serviço/Combo "${newService.name}" criado.`);
+    } catch (e) {
+      console.warn('Service saved locally', e);
+    }
+
+    addToast('Serviço adicionado com sucesso!', 'success');
+    return true;
+  };
+
+  const updateService = async (id: string, data: Partial<ServiceItem>): Promise<boolean> => {
+    setServices((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
+
+    try {
+      await updateDoc(doc(db, 'services', id), data);
+      addAdminLog('Editar Serviço', `Serviço ID ${id} atualizado.`);
+    } catch (e) {
+      console.warn('Service updated locally', e);
+    }
+
+    addToast('Serviço atualizado com sucesso!', 'success');
+    return true;
+  };
+
+  const deleteService = async (id: string): Promise<boolean> => {
+    setServices((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await deleteDoc(doc(db, 'services', id));
+      addAdminLog('Excluir Serviço', `Serviço ID ${id} removido.`);
+    } catch (e) {
+      console.warn('Service deleted locally', e);
+    }
+    addToast('Serviço removido.', 'info');
+    return true;
+  };
+
+  // FEED ACTIONS
+  const toggleLikePost = (postId: string) => {
+    setFeedPosts((prev) =>
+      prev.map((post) => {
+        if (post.id === postId) {
+          const isLiked = !post.isLiked;
+          const newLikes = isLiked ? post.likesCount + 1 : post.likesCount - 1;
+          updateDoc(doc(db, 'feed', postId), { likesCount: newLikes }).catch(() => {});
+          return {
+            ...post,
+            isLiked,
+            likesCount: newLikes,
+          };
+        }
+        return post;
+      })
+    );
+  };
+
+  const addFeedPost = async (postData: Omit<FeedPost, 'id' | 'date' | 'likesCount'>): Promise<boolean> => {
+    const newId = `post-${Date.now()}`;
+    const newPost: FeedPost = {
+      ...postData,
+      id: newId,
+      date: 'Hoje',
+      likesCount: 0,
+      active: postData.active ?? true,
+      highlighted: postData.highlighted ?? false,
+    };
+    setFeedPosts((prev) => [newPost, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'feed', newId), newPost);
+      addAdminLog('Nova Publicação Feed', `Publicação "${newPost.title}" criada.`);
+    } catch (e) {
+      console.warn('Post saved locally', e);
+    }
+
+    addToast('Publicação criada no Feed!', 'success');
+    return true;
+  };
+
+  const updateFeedPost = async (id: string, data: Partial<FeedPost>): Promise<boolean> => {
+    setFeedPosts((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+
+    try {
+      await updateDoc(doc(db, 'feed', id), data);
+      addAdminLog('Editar Feed', `Publicação ID ${id} atualizada.`);
+    } catch (e) {
+      console.warn('Post updated locally', e);
+    }
+
+    addToast('Publicação atualizada.', 'success');
+    return true;
+  };
+
+  const deleteFeedPost = async (id: string): Promise<boolean> => {
+    setFeedPosts((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await deleteDoc(doc(db, 'feed', id));
+      addAdminLog('Excluir Feed', `Publicação ID ${id} excluída.`);
+    } catch (e) {
+      console.warn('Post deleted locally', e);
+    }
+    addToast('Publicação excluída.', 'info');
+    return true;
+  };
+
+  // CUSTOMER CRUD
+  const updateCustomer = async (id: string, data: Partial<Customer>): Promise<boolean> => {
+    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
+    try {
+      await updateDoc(doc(db, 'customers', id), data);
+    } catch (e) {
+      console.warn('Customer updated locally', e);
+    }
+    addToast('Dados do cliente atualizados.', 'success');
+    return true;
+  };
+
+  // INSUMOS CRUD
+  const addInsumo = async (itemData: Omit<InsumoItem, 'id'>): Promise<boolean> => {
+    const newId = `ins-${Date.now()}`;
+    const newItem: InsumoItem = { ...itemData, id: newId };
+    setInsumos((prev) => [...prev, newItem]);
+
+    try {
+      await setDoc(doc(db, 'inventory', newId), newItem);
+      addAdminLog('Adicionar Insumo', `Insumo "${newItem.name}" adicionado ao estoque.`);
+    } catch (e) {
+      console.warn('Insumo saved locally', e);
+    }
+
+    addToast('Insumo cadastrado no estoque.', 'success');
+    return true;
+  };
+
+  const updateInsumo = async (id: string, data: Partial<InsumoItem>): Promise<boolean> => {
+    setInsumos((prev) => prev.map((i) => (i.id === id ? { ...i, ...data } : i)));
+
+    try {
+      await updateDoc(doc(db, 'inventory', id), data);
+      addAdminLog('Editar Insumo', `Insumo ID ${id} atualizado.`);
+    } catch (e) {
+      console.warn('Insumo updated locally', e);
+    }
+
+    addToast('Insumo atualizado.', 'success');
+    return true;
+  };
+
+  const deleteInsumo = async (id: string): Promise<boolean> => {
+    setInsumos((prev) => prev.filter((i) => i.id !== id));
+    try {
+      await deleteDoc(doc(db, 'inventory', id));
+      addAdminLog('Excluir Insumo', `Insumo ID ${id} removido.`);
+    } catch (e) {
+      console.warn('Insumo deleted locally', e);
+    }
+    addToast('Insumo removido do estoque.', 'info');
+    return true;
+  };
+
+  // PRODUCTS CRUD & SALES
+  const addProduct = async (productData: Omit<SaleProduct, 'id' | 'salesCount' | 'totalRevenue'>): Promise<boolean> => {
+    const newId = `prod-${Date.now()}`;
+    const newProd: SaleProduct = {
+      ...productData,
+      id: newId,
+      salesCount: 0,
+      totalRevenue: 0,
+    };
+    setProducts((prev) => [...prev, newProd]);
+
+    try {
+      await setDoc(doc(db, 'products', newId), newProd);
+      addAdminLog('Adicionar Produto', `Produto de venda "${newProd.name}" cadastrado.`);
+    } catch (e) {
+      console.warn('Product saved locally', e);
+    }
+
+    addToast('Produto de venda cadastrado!', 'success');
+    return true;
+  };
+
+  const updateProduct = async (id: string, data: Partial<SaleProduct>): Promise<boolean> => {
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+
+    try {
+      await updateDoc(doc(db, 'products', id), data);
+      addAdminLog('Editar Produto', `Produto ID ${id} atualizado.`);
+    } catch (e) {
+      console.warn('Product updated locally', e);
+    }
+
+    addToast('Produto de venda atualizado.', 'success');
+    return true;
+  };
+
+  const deleteProduct = async (id: string): Promise<boolean> => {
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await deleteDoc(doc(db, 'products', id));
+      addAdminLog('Excluir Produto', `Produto ID ${id} removido.`);
+    } catch (e) {
+      console.warn('Product deleted locally', e);
+    }
+    addToast('Produto removido.', 'info');
+    return true;
+  };
+
+  const recordSale = async (saleData: {
+    customerName: string;
+    customerPhone: string;
+    productId: string;
+    quantity: number;
+    paymentMethod: string;
+  }): Promise<boolean> => {
+    const prod = products.find((p) => p.id === saleData.productId);
+    if (!prod) {
+      addToast('Produto não encontrado.', 'error');
+      return false;
+    }
+
+    if (prod.quantity < saleData.quantity) {
+      addToast(`Estoque insuficiente! Apenas ${prod.quantity} unidades disponíveis.`, 'error');
+      return false;
+    }
+
+    const totalAmount = prod.salePrice * saleData.quantity;
+    const updatedProdQuantity = prod.quantity - saleData.quantity;
+    const updatedSalesCount = prod.salesCount + saleData.quantity;
+    const updatedRevenue = prod.totalRevenue + totalAmount;
+
+    // Update product stock locally
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === prod.id
+          ? {
+              ...p,
+              quantity: updatedProdQuantity,
+              salesCount: updatedSalesCount,
+              totalRevenue: updatedRevenue,
+            }
+          : p
+      )
+    );
+
+    // Save sale transaction
+    const saleId = `sale-${Date.now()}`;
+    const transaction: SaleTransaction = {
+      id: saleId,
+      customerName: saleData.customerName || 'Cliente Balcão',
+      customerPhone: saleData.customerPhone || '',
+      items: [
+        {
+          productId: prod.id,
+          productName: prod.name,
+          quantity: saleData.quantity,
+          unitPrice: prod.salePrice,
+          totalPrice: totalAmount,
+        },
+      ],
+      totalAmount,
+      paymentMethod: saleData.paymentMethod,
+      date: new Date().toISOString(),
+    };
+
+    try {
+      await updateDoc(doc(db, 'products', prod.id), {
+        quantity: updatedProdQuantity,
+        salesCount: updatedSalesCount,
+        totalRevenue: updatedRevenue,
+      });
+      await setDoc(doc(db, 'sales', saleId), transaction);
+      addNotification(
+        'venda',
+        'Venda de Produto Realizada',
+        `Venda de ${saleData.quantity}x ${prod.name} no valor de R$ ${totalAmount.toFixed(2)}.`
+      );
+
+      // Check low stock alert
+      if (updatedProdQuantity <= prod.minStock) {
+        addNotification(
+          'estoque',
+          'Alerta de Estoque Baixo',
+          `O produto ${prod.name} atingiu o limite mínimo (${updatedProdQuantity} unidades).`
+        );
+      }
+    } catch (e) {
+      console.warn('Sale recorded locally', e);
+    }
+
+    addToast(`Venda registrada com sucesso! R$ ${totalAmount.toFixed(2)}`, 'success');
+    return true;
+  };
+
+  // EXPENSES CRUD
+  const addExpense = async (expenseData: Omit<ExpenseItem, 'id'>): Promise<boolean> => {
+    const newId = `exp-${Date.now()}`;
+    const newExp: ExpenseItem = { ...expenseData, id: newId };
+    setExpenses((prev) => [newExp, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'financialTransactions', newId), {
+        ...newExp,
+        type: 'expense',
+      });
+      addAdminLog('Registrar Despesa', `Despesa "${newExp.description}" de R$ ${newExp.amount} registrada.`);
+    } catch (e) {
+      console.warn('Expense saved locally', e);
+    }
+
+    addToast('Despesa registrada no financeiro.', 'success');
+    return true;
+  };
+
+  const deleteExpense = async (id: string): Promise<boolean> => {
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    try {
+      await deleteDoc(doc(db, 'financialTransactions', id));
+    } catch (e) {
+      console.warn('Expense deleted locally', e);
+    }
+    addToast('Despesa removida.', 'info');
+    return true;
+  };
+
+  // COUPONS CRUD
+  const addCoupon = async (couponData: Omit<Coupon, 'id' | 'usedCount'>): Promise<boolean> => {
+    const newId = `coup-${Date.now()}`;
+    const newCoupon: Coupon = { ...couponData, id: newId, usedCount: 0 };
+    setCoupons((prev) => [...prev, newCoupon]);
+
+    try {
+      await setDoc(doc(db, 'coupons', newId), newCoupon);
+      addAdminLog('Criar Cupom', `Cupom de desconto "${newCoupon.code}" criado.`);
+    } catch (e) {
+      console.warn('Coupon saved locally', e);
+    }
+
+    addToast('Cupom de desconto cadastrado!', 'success');
+    return true;
+  };
+
+  const updateCoupon = async (id: string, data: Partial<Coupon>): Promise<boolean> => {
+    setCoupons((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
+
+    try {
+      await updateDoc(doc(db, 'coupons', id), data);
+      addAdminLog('Editar Cupom', `Cupom ID ${id} atualizado.`);
+    } catch (e) {
+      console.warn('Coupon updated locally', e);
+    }
+
+    addToast('Cupom atualizado.', 'success');
+    return true;
+  };
+
+  const deleteCoupon = async (id: string): Promise<boolean> => {
+    setCoupons((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await deleteDoc(doc(db, 'coupons', id));
+      addAdminLog('Excluir Cupom', `Cupom ID ${id} removido.`);
+    } catch (e) {
+      console.warn('Coupon deleted locally', e);
+    }
+    addToast('Cupom removido.', 'info');
+    return true;
+  };
+
+  // BLOCKED DATES CRUD
+  const addBlockedDate = async (blockedData: Omit<BlockedDate, 'id'>): Promise<boolean> => {
+    const newId = `block-${Date.now()}`;
+    const newBlocked: BlockedDate = { ...blockedData, id: newId };
+    setBlockedDates((prev) => [...prev, newBlocked]);
+
+    try {
+      await setDoc(doc(db, 'blockedDates', newId), newBlocked);
+      addAdminLog('Bloquear Data', `Data ${newBlocked.date} bloqueada para agendamentos.`);
+    } catch (e) {
+      console.warn('Blocked date saved locally', e);
+    }
+
+    addToast(`Data ${newBlocked.date} bloqueada com sucesso!`, 'success');
+    return true;
+  };
+
+  const deleteBlockedDate = async (id: string): Promise<boolean> => {
+    setBlockedDates((prev) => prev.filter((b) => b.id !== id));
+    try {
+      await deleteDoc(doc(db, 'blockedDates', id));
+      addAdminLog('Desbloquear Data', `Bloqueio ID ${id} removido.`);
+    } catch (e) {
+      console.warn('Blocked date deleted locally', e);
+    }
+    addToast('Data desbloqueada.', 'info');
+    return true;
+  };
+
+  // REVIEWS CRUD
+  const addReview = async (reviewData: Omit<Review, 'id' | 'date' | 'status'>): Promise<boolean> => {
+    const newId = `rev-${Date.now()}`;
+    const newReview: Review = {
+      ...reviewData,
+      id: newId,
+      date: 'Hoje',
+      status: 'Visível',
+    };
+    setReviews((prev) => [newReview, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'reviews', newId), newReview);
+      addNotification('avaliacao', 'Nova Avaliação Recebida', `${newReview.authorName} enviou uma nota ${newReview.rating}/5.`);
+    } catch (e) {
+      console.warn('Review saved locally', e);
+    }
+
+    addToast('Obrigado pela sua avaliação!', 'success');
+    return true;
+  };
+
+  const updateReviewStatus = async (id: string, status: 'Visível' | 'Oculto'): Promise<boolean> => {
+    setReviews((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+    try {
+      await updateDoc(doc(db, 'reviews', id), { status });
+    } catch (e) {
+      console.warn('Review updated locally', e);
+    }
+    addToast(`Status da avaliação alterado para "${status}".`, 'info');
+    return true;
+  };
+
+  const deleteReview = async (id: string): Promise<boolean> => {
+    setReviews((prev) => prev.filter((r) => r.id !== id));
+    try {
+      await deleteDoc(doc(db, 'reviews', id));
+    } catch (e) {
+      console.warn('Review deleted locally', e);
+    }
+    addToast('Avaliação removida.', 'info');
+    return true;
+  };
+
+  // SETTINGS
+  const updateSettings = async (newSettings: Partial<BarbershopInfo>): Promise<boolean> => {
+    const updated = { ...barbershopInfo, ...newSettings };
+    setBarbershopInfo(updated);
+
+    try {
+      await setDoc(doc(db, 'settings', 'barbershopInfo'), updated);
+      addAdminLog('Alterar Configurações', 'Dados gerais da Barbearia atualizados.');
+    } catch (e) {
+      console.warn('Settings updated locally', e);
+    }
+
+    addToast('Configurações da Barbearia salvas!', 'success');
+    return true;
+  };
+
+  // NOTIFICATIONS
+  const markNotificationRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+    updateDoc(doc(db, 'notifications', id), { read: true }).catch(() => {});
+  };
+
+  const clearNotifications = () => {
+    setNotifications([]);
+    addToast('Notificações limpas.', 'info');
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        activePage,
+        setActivePage,
+        barbershopInfo,
+        barbers,
+        services,
+        feedPosts,
+        appointments,
+        customers,
+        insumos,
+        products,
+        expenses,
+        coupons,
+        blockedDates,
+        reviews,
+        sales,
+        notifications,
+        adminLogs,
+        customerName,
+        setCustomerName,
+        customerPhone,
+        setCustomerPhone,
+        isLoggedIn,
+        currentUser,
+        login,
+        registerUser,
+        logout,
+        updateProfile,
+        isAdminLoggedIn,
+        adminUser,
+        loginAdmin,
+        logoutAdmin,
+        selectedBarberForBooking,
+        setSelectedBarberForBooking,
+        addAppointment,
+        updateAppointmentStatus,
+        cancelAppointment,
+        rescheduleAppointment,
+        updateAppointmentServices,
+        deleteAppointment,
+        clearHistory,
+        addBarber,
+        updateBarber,
+        deleteBarber,
+        addService,
+        updateService,
+        deleteService,
+        toggleLikePost,
+        addFeedPost,
+        updateFeedPost,
+        deleteFeedPost,
+        updateCustomer,
+        addInsumo,
+        updateInsumo,
+        deleteInsumo,
+        addProduct,
+        updateProduct,
+        deleteProduct,
+        recordSale,
+        addExpense,
+        deleteExpense,
+        addCoupon,
+        updateCoupon,
+        deleteCoupon,
+        addBlockedDate,
+        deleteBlockedDate,
+        addReview,
+        updateReviewStatus,
+        deleteReview,
+        updateSettings,
+        markNotificationRead,
+        clearNotifications,
+        toasts,
+        addToast,
+        removeToast,
+        isSidebarOpen,
+        setIsSidebarOpen,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = (): AppContextType => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
