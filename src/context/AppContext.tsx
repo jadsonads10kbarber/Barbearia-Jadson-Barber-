@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   collection,
   doc,
@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { playNotificationSound as playAudioEffect, NotificationSoundType } from '../utils/audio';
 import {
   Barber,
   ServiceItem,
@@ -203,11 +204,36 @@ interface AppContextType {
   updateReviewStatus: (id: string, status: 'Visível' | 'Oculto') => Promise<boolean>;
   deleteReview: (id: string) => Promise<boolean>;
 
+  // Client Review Prompt & Auto-Completion
+  pendingReviewAppointment: Appointment | null;
+  setPendingReviewAppointment: (app: Appointment | null) => void;
+  isReviewModalOpen: boolean;
+  setIsReviewModalOpen: (open: boolean) => void;
+  submitAppointmentReview: (
+    appointmentId: string,
+    rating: number,
+    comment: string,
+    tags?: string[]
+  ) => Promise<boolean>;
+  dismissAppointmentReview: (appointmentId: string) => void;
+  reviewedAppointmentIds: string[];
+
   // Settings
   updateSettings: (newSettings: Partial<BarbershopInfo>) => Promise<boolean>;
 
-  // Notifications
+  // Notifications & Sound System
+  isSoundMuted: boolean;
+  setIsSoundMuted: (muted: boolean) => void;
+  toggleSoundMuted: () => void;
+  soundVolume: number;
+  setSoundVolume: (volume: number) => void;
+  soundType: NotificationSoundType;
+  setSoundType: (type: NotificationSoundType) => void;
+  playNotificationSound: (type?: NotificationSoundType) => void;
+  testNotificationSound: () => void;
   markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
+  deleteNotification: (id: string) => void;
   clearNotifications: () => void;
 
   // Toast System
@@ -225,14 +251,74 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const LOCAL_STORAGE_CUSTOMER_KEY = 'jadson_customer';
 const LOCAL_STORAGE_USER_KEY = 'jadson_logged_user';
 const LOCAL_STORAGE_ADMIN_USER_KEY = 'jadson_admin_logged_user';
+const LOCAL_STORAGE_REVIEWED_KEY = 'jadson_reviewed_appts';
+const LOCAL_STORAGE_DISMISSED_REVIEW_KEY = 'jadson_dismissed_reviews';
+const LOCAL_STORAGE_BARBERS_KEY = 'jadson_barbers_list';
+const LOCAL_STORAGE_SOUND_MUTED_KEY = 'jadson_admin_sound_muted';
+const LOCAL_STORAGE_SOUND_VOLUME_KEY = 'jadson_admin_sound_volume';
+const LOCAL_STORAGE_SOUND_TYPE_KEY = 'jadson_admin_sound_type';
+
+// Helper to sanitize Firestore payloads (remove undefined, NaN, circular refs)
+export function cleanFirestoreData<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as any;
+  }
+  if (typeof data !== 'object') {
+    if (typeof data === 'number' && isNaN(data)) {
+      return 0 as any;
+    }
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => cleanFirestoreData(item)) as any;
+  }
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data as Record<string, any>)) {
+    if (value !== undefined) {
+      cleaned[key] = cleanFirestoreData(value);
+    }
+  }
+  return cleaned as T;
+}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activePage, setActivePage] = useState<ActivePage>('agenda');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
+  // Client Review Prompt State
+  const [manualReviewAppointment, setManualReviewAppointment] = useState<Appointment | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
+  const [dismissedReviewIds, setDismissedReviewIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_DISMISSED_REVIEW_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [reviewedAppointmentIds, setReviewedAppointmentIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_REVIEWED_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Core collections state initialized with default values, synced in real-time with Firestore
   const [barbershopInfo, setBarbershopInfo] = useState<BarbershopInfo>(initialBarbershopInfo);
-  const [barbers, setBarbers] = useState<Barber[]>(initialBarbers);
+  const [barbers, setBarbers] = useState<Barber[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_BARBERS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return initialBarbers;
+  });
   const [services, setServices] = useState<ServiceItem[]>(initialServices);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(initialFeedPosts);
   const [appointments, setAppointments] = useState<Appointment[]>(sampleAppointments);
@@ -328,15 +414,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const apptsUnsub = onSnapshot(
         collection(db, 'appointments'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: Appointment[] = [];
-            snapshot.forEach((d) => {
-              list.push({ id: d.id, ...d.data() } as Appointment);
-            });
-            // Sort by date/startTime desc
-            list.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
-            setAppointments(list);
-          }
+          const list: Appointment[] = [];
+          snapshot.forEach((d) => {
+            list.push({ id: d.id, ...d.data() } as Appointment);
+          });
+          // Sort by date/startTime desc
+          list.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
+          setAppointments(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'appointments')
       );
@@ -346,11 +430,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const servUnsub = onSnapshot(
         collection(db, 'services'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: ServiceItem[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as ServiceItem));
-            setServices(list);
-          }
+          const list: ServiceItem[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as ServiceItem));
+          setServices(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'services')
       );
@@ -360,13 +442,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const barbUnsub = onSnapshot(
         collection(db, 'barbers'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: Barber[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Barber));
+          const list: Barber[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Barber));
+          if (list.length > 0) {
             setBarbers(list);
+            try {
+              localStorage.setItem(LOCAL_STORAGE_BARBERS_KEY, JSON.stringify(list));
+            } catch (e) {}
+          } else {
+            const saved = localStorage.getItem(LOCAL_STORAGE_BARBERS_KEY);
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setBarbers(parsed);
+                  return;
+                }
+              } catch (e) {}
+            }
+            setBarbers([]);
           }
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'barbers')
+        (err) => {
+          console.warn('Firestore barbers listener notice:', err);
+        }
       );
       unsubs.push(barbUnsub);
 
@@ -374,11 +473,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const feedUnsub = onSnapshot(
         collection(db, 'feed'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: FeedPost[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as FeedPost));
-            setFeedPosts(list);
-          }
+          const list: FeedPost[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as FeedPost));
+          setFeedPosts(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'feed')
       );
@@ -388,11 +485,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const custUnsub = onSnapshot(
         collection(db, 'customers'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: Customer[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Customer));
-            setCustomers(list);
-          }
+          const list: Customer[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Customer));
+          setCustomers(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
       );
@@ -402,11 +497,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const insUnsub = onSnapshot(
         collection(db, 'inventory'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: InsumoItem[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as InsumoItem));
-            setInsumos(list);
-          }
+          const list: InsumoItem[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as InsumoItem));
+          setInsumos(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'inventory')
       );
@@ -416,11 +509,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const prodUnsub = onSnapshot(
         collection(db, 'products'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: SaleProduct[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as SaleProduct));
-            setProducts(list);
-          }
+          const list: SaleProduct[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as SaleProduct));
+          setProducts(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'products')
       );
@@ -430,16 +521,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const expUnsub = onSnapshot(
         collection(db, 'financialTransactions'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: ExpenseItem[] = [];
-            snapshot.forEach((d) => {
-              const data = d.data();
-              if (data.type === 'expense' || data.amount) {
-                list.push({ id: d.id, ...data } as ExpenseItem);
-              }
-            });
-            setExpenses(list);
-          }
+          const list: ExpenseItem[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            if (data.type === 'expense' || data.amount) {
+              list.push({ id: d.id, ...data } as ExpenseItem);
+            }
+          });
+          setExpenses(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'financialTransactions')
       );
@@ -449,11 +538,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const coupUnsub = onSnapshot(
         collection(db, 'coupons'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: Coupon[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Coupon));
-            setCoupons(list);
-          }
+          const list: Coupon[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Coupon));
+          setCoupons(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'coupons')
       );
@@ -463,11 +550,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const blockUnsub = onSnapshot(
         collection(db, 'blockedDates'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: BlockedDate[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as BlockedDate));
-            setBlockedDates(list);
-          }
+          const list: BlockedDate[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as BlockedDate));
+          setBlockedDates(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'blockedDates')
       );
@@ -477,11 +562,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const revUnsub = onSnapshot(
         collection(db, 'reviews'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: Review[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Review));
-            setReviews(list);
-          }
+          const list: Review[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Review));
+          setReviews(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'reviews')
       );
@@ -503,11 +586,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const notifUnsub = onSnapshot(
         collection(db, 'notifications'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: AdminNotification[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AdminNotification));
-            setNotifications(list);
-          }
+          const list: AdminNotification[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AdminNotification));
+          setNotifications(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'notifications')
       );
@@ -517,12 +598,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const logsUnsub = onSnapshot(
         collection(db, 'adminLogs'),
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list: AdminLog[] = [];
-            snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AdminLog));
-            list.sort((a, b) => b.date.localeCompare(a.date));
-            setAdminLogs(list);
-          }
+          const list: AdminLog[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AdminLog));
+          list.sort((a, b) => b.date.localeCompare(a.date));
+          setAdminLogs(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'adminLogs')
       );
@@ -535,6 +614,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubs.forEach((fn) => fn());
     };
   }, []);
+
+  // Intelligent Auto-Completion: Conclude appointments automatically when endTime is reached
+  useEffect(() => {
+    const checkAndAutoComplete = async () => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const currentDay = String(now.getDate()).padStart(2, '0');
+      const todayDateStr = `${currentYear}-${currentMonth}-${currentDay}`;
+
+      const currentHours = String(now.getHours()).padStart(2, '0');
+      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+      const currentTimeStr = `${currentHours}:${currentMinutes}`;
+
+      const toComplete = appointments.filter((app) => {
+        if (app.status === 'Agendado' || app.status === 'Confirmado' || app.status === 'Em atendimento') {
+          const isPastDate = app.date < todayDateStr;
+          const isPastTimeToday = app.date === todayDateStr && app.endTime <= currentTimeStr;
+          return isPastDate || isPastTimeToday;
+        }
+        return false;
+      });
+
+      if (toComplete.length > 0) {
+        const completedIds = new Set(toComplete.map((a) => a.id));
+        setAppointments((prev) =>
+          prev.map((a) =>
+            completedIds.has(a.id)
+              ? { ...a, status: 'Concluído' as AppointmentStatus, updatedAt: new Date().toISOString() }
+              : a
+          )
+        );
+
+        for (const app of toComplete) {
+          try {
+            await updateDoc(doc(db, 'appointments', app.id), {
+              status: 'Concluído',
+              updatedAt: new Date().toISOString(),
+            });
+            addNotification(
+              'agendamento',
+              'Serviço Concluído Automaticamente',
+              `O atendimento de ${app.customerName} (${app.services.map((s) => s.name).join(', ')}) com ${app.barberName} atingiu o horário previsto (${app.endTime}) e foi concluído com sucesso.`
+            );
+          } catch (err) {
+            console.warn('Auto-complete update error:', err);
+          }
+        }
+      }
+    };
+
+    checkAndAutoComplete();
+    const interval = setInterval(checkAndAutoComplete, 15000);
+    return () => clearInterval(interval);
+  }, [appointments]);
+
+  // Determine which completed appointment requires review from the active client
+  const pendingReviewAppointment = useMemo(() => {
+    if (manualReviewAppointment) return manualReviewAppointment;
+    if (activePage.startsWith('admin-')) return null;
+
+    const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
+    const clientPhoneDigits = normalizePhone(currentUser?.phone || customerPhone || '');
+
+    const candidate = appointments.find((app) => {
+      if (app.status !== 'Concluído') return false;
+      if (app.reviewed) return false;
+      if (reviewedAppointmentIds.includes(app.id)) return false;
+      if (dismissedReviewIds.includes(app.id)) return false;
+
+      const appPhoneDigits = normalizePhone(app.customerPhone || '');
+      const matchesPhone =
+        clientPhoneDigits &&
+        appPhoneDigits &&
+        (clientPhoneDigits === appPhoneDigits ||
+          clientPhoneDigits.endsWith(appPhoneDigits) ||
+          appPhoneDigits.endsWith(clientPhoneDigits));
+      const matchesUserId = currentUser?.id && app.customerId === currentUser.id;
+
+      return Boolean(matchesPhone || matchesUserId);
+    });
+
+    return candidate || null;
+  }, [appointments, currentUser, customerPhone, reviewedAppointmentIds, dismissedReviewIds, manualReviewAppointment, activePage]);
 
   // Helper to record admin log
   const addAdminLog = async (action: string, details: string, previousData?: any, newData?: any) => {
@@ -644,6 +807,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (updated.name) setCustomerNameState(updated.name);
     if (updated.phone) setCustomerPhoneState(updated.phone);
     localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updated));
+
+    // Also synchronize avatar/name with customers collection and user's appointments
+    const newAvatar = updated.avatar || '';
+    const userName = updated.name || currentUser.name;
+    const userPhone = updated.phone || currentUser.phone;
+    const userEmail = updated.email || currentUser.email;
+
+    // Update in customers state
+    setCustomers((prev) => {
+      const matchIndex = prev.findIndex(
+        (c) =>
+          c.id === updated.id ||
+          (c.phone && c.phone === userPhone) ||
+          (c.email && c.email.toLowerCase() === userEmail.toLowerCase()) ||
+          c.name.toLowerCase() === userName.toLowerCase()
+      );
+
+      if (matchIndex >= 0) {
+        return prev.map((c, idx) =>
+          idx === matchIndex
+            ? { ...c, name: userName, phone: userPhone, email: userEmail, avatar: newAvatar, photo: newAvatar }
+            : c
+        );
+      } else {
+        const newCust: Customer = {
+          id: updated.id || `cust-${Date.now()}`,
+          name: userName,
+          phone: userPhone,
+          email: userEmail,
+          avatar: newAvatar,
+          photo: newAvatar,
+          createdAt: new Date().toLocaleDateString('pt-BR'),
+          totalAppointments: 0,
+          totalSpent: 0,
+          status: 'ativo',
+        };
+        return [newCust, ...prev];
+      }
+    });
+
+    // Update in user appointments state
+    setAppointments((prev) =>
+      prev.map((app) => {
+        if (
+          app.customerId === updated.id ||
+          (app.customerPhone && app.customerPhone === userPhone) ||
+          app.customerName.toLowerCase() === userName.toLowerCase()
+        ) {
+          return { ...app, customerName: userName, customerPhone: userPhone, customerAvatar: newAvatar };
+        }
+        return app;
+      })
+    );
+
+    // Sync to Firestore
+    try {
+      const custDocId = updated.id || `cust-${Date.now()}`;
+      setDoc(
+        doc(db, 'customers', custDocId),
+        cleanFirestoreData({
+          id: custDocId,
+          name: userName,
+          phone: userPhone,
+          email: userEmail,
+          avatar: newAvatar,
+          photo: newAvatar,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      ).catch((e) => console.warn('Firestore customer avatar sync notice:', e));
+    } catch (e) {
+      console.warn('Local customer profile updated:', e);
+    }
+
     addToast('Perfil atualizado com sucesso!', 'success');
   };
 
@@ -722,17 +959,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     appointmentData: Omit<Appointment, 'id' | 'createdAt'>
   ): Promise<Appointment> => {
     const newId = `app-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const effectiveAvatar =
+      appointmentData.customerAvatar ||
+      (currentUser &&
+      (currentUser.name === appointmentData.customerName ||
+        currentUser.phone === appointmentData.customerPhone ||
+        currentUser.id === appointmentData.customerId)
+        ? currentUser.avatar
+        : '') ||
+      '';
+
     const newAppointment: Appointment = {
       ...appointmentData,
       id: newId,
+      customerAvatar: effectiveAvatar,
       createdAt: new Date().toISOString(),
     };
 
     setAppointments((prev) => [newAppointment, ...prev]);
 
+    // Also ensure customer in CRM has the avatar and updated count/spent
+    setCustomers((prev) => {
+      const matchIndex = prev.findIndex(
+        (c) =>
+          c.id === newAppointment.customerId ||
+          c.phone === newAppointment.customerPhone ||
+          c.name.toLowerCase() === newAppointment.customerName.toLowerCase()
+      );
+      if (matchIndex >= 0) {
+        return prev.map((c, idx) =>
+          idx === matchIndex
+            ? {
+                ...c,
+                totalAppointments: (c.totalAppointments || 0) + 1,
+                lastAppointmentDate: newAppointment.date,
+                totalSpent: (c.totalSpent || 0) + (newAppointment.totalPrice || 0),
+                avatar: effectiveAvatar || c.avatar || c.photo,
+                photo: effectiveAvatar || c.photo || c.avatar,
+              }
+            : c
+        );
+      } else {
+        const newCust: Customer = {
+          id: newAppointment.customerId !== 'cust-local' ? newAppointment.customerId : `cust-${Date.now()}`,
+          name: newAppointment.customerName,
+          phone: newAppointment.customerPhone,
+          email: currentUser?.email || 'cliente@jadsonbarber.com.br',
+          avatar: effectiveAvatar,
+          photo: effectiveAvatar,
+          createdAt: new Date().toLocaleDateString('pt-BR'),
+          totalAppointments: 1,
+          lastAppointmentDate: newAppointment.date,
+          totalSpent: newAppointment.totalPrice || 0,
+          status: 'ativo',
+        };
+        return [newCust, ...prev];
+      }
+    });
+
     // Save to Firestore
     try {
-      await setDoc(doc(db, 'appointments', newId), newAppointment);
+      const cleanApp = cleanFirestoreData(newAppointment);
+      await setDoc(doc(db, 'appointments', newId), cleanApp);
       addNotification(
         'agendamento',
         'Novo Agendamento',
@@ -923,14 +1211,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // BARBERS CRUD
   const addBarber = async (barberData: Omit<Barber, 'id'>): Promise<boolean> => {
     const newId = `barber-${Date.now()}`;
-    const newBarber: Barber = { ...barberData, id: newId };
-    setBarbers((prev) => [...prev, newBarber]);
+    const newBarber: Barber = {
+      ...barberData,
+      id: newId,
+      name: barberData.name?.trim() || 'Barbeiro',
+      role: barberData.role || 'Barbeiro Especialista',
+      photo: barberData.photo || 'https://images.unsplash.com/photo-1503443207922-dff7d543fd0e?w=500&auto=format&fit=crop&q=80',
+      rating: barberData.rating !== undefined ? barberData.rating : 5.0,
+      reviewsCount: barberData.reviewsCount !== undefined ? barberData.reviewsCount : 0,
+      status: barberData.status || 'available',
+      active: barberData.active !== false,
+      employmentStatus: barberData.employmentStatus || 'Admitido',
+      specialties: Array.isArray(barberData.specialties) ? barberData.specialties : ['Degradê', 'Barba'],
+      serviceCommission: Number(barberData.serviceCommission) || 0,
+      salesCommission: Number(barberData.salesCommission) || 0,
+      salary: Number(barberData.salary) || 0,
+      workingHours: barberData.workingHours || { start: '08:00', end: '20:00' },
+      lunchBreak: barberData.lunchBreak || { start: '12:00', end: '13:00' },
+      workingDays: barberData.workingDays || [0, 1, 2, 3, 4, 5, 6],
+      notes: barberData.notes || '',
+      phone: barberData.phone || barberData.phone1 || '',
+      phone1: barberData.phone1 || barberData.phone || '',
+      phone2: barberData.phone2 || '',
+      cpf: barberData.cpf || '',
+      cnpj: barberData.cnpj || '',
+      pixKey: barberData.pixKey || '',
+      email: barberData.email || '',
+      address: barberData.address || '',
+    };
+
+    setBarbers((prev) => {
+      const next = [...prev.filter((b) => b.id !== newId), newBarber];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_BARBERS_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
 
     try {
-      await setDoc(doc(db, 'barbers', newId), newBarber);
+      const cleanPayload = cleanFirestoreData(newBarber);
+      await setDoc(doc(db, 'barbers', newId), cleanPayload);
       addAdminLog('Adicionar Barbeiro', `Barbeiro ${newBarber.name} cadastrado na equipe.`);
     } catch (e) {
-      console.warn('Barber saved locally', e);
+      console.warn('Barber saved locally in cache/localStorage:', e);
     }
 
     addToast('Barbeiro adicionado com sucesso!', 'success');
@@ -938,13 +1261,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateBarber = async (id: string, data: Partial<Barber>): Promise<boolean> => {
-    setBarbers((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
+    setBarbers((prev) => {
+      const next = prev.map((b) => (b.id === id ? { ...b, ...data } : b));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_BARBERS_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
 
     try {
-      await updateDoc(doc(db, 'barbers', id), data);
+      const cleanPayload = cleanFirestoreData(data);
+      await updateDoc(doc(db, 'barbers', id), cleanPayload);
       addAdminLog('Editar Barbeiro', `Dados do barbeiro ID ${id} atualizados.`);
     } catch (e) {
-      console.warn('Barber updated locally', e);
+      console.warn('Barber updated locally in cache/localStorage:', e);
     }
 
     addToast('Dados do barbeiro atualizados.', 'success');
@@ -952,12 +1282,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteBarber = async (id: string): Promise<boolean> => {
-    setBarbers((prev) => prev.filter((b) => b.id !== id));
+    setBarbers((prev) => {
+      const next = prev.filter((b) => b.id !== id);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_BARBERS_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
     try {
       await deleteDoc(doc(db, 'barbers', id));
       addAdminLog('Excluir Barbeiro', `Barbeiro ID ${id} removido.`);
     } catch (e) {
-      console.warn('Barber deleted locally', e);
+      console.warn('Barber deleted locally in cache/localStorage:', e);
     }
     addToast('Barbeiro removido.', 'info');
     return true;
@@ -1410,6 +1747,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
+  // CLIENT REVIEW PROMPT & APPOINTMENT EVALUATION
+  const submitAppointmentReview = async (
+    appointmentId: string,
+    rating: number,
+    comment: string,
+    tags: string[] = []
+  ): Promise<boolean> => {
+    const targetApp = appointments.find((a) => a.id === appointmentId);
+    if (!targetApp) return false;
+
+    const fullComment =
+      tags.length > 0
+        ? `${tags.join(' • ')}${comment ? ` — ${comment}` : ''}`
+        : comment || 'Excelente atendimento!';
+
+    const serviceName =
+      targetApp.services.map((s) => s.name).join(' + ') || (targetApp.isCombo ? 'Combo VIP' : 'Corte');
+
+    const newRevId = `rev-${Date.now()}`;
+    const newRev: Review = {
+      id: newRevId,
+      authorName: targetApp.customerName || customerName || 'Cliente',
+      customerName: targetApp.customerName || customerName || 'Cliente',
+      barberId: targetApp.barberId,
+      barberName: targetApp.barberName,
+      rating,
+      comment: fullComment,
+      serviceName,
+      date: new Date().toLocaleDateString('pt-BR'),
+      status: 'Visível',
+    };
+
+    // 1. Add to reviews list
+    setReviews((prev) => [newRev, ...prev]);
+
+    // 2. Mark appointment as reviewed in local state
+    setAppointments((prev) =>
+      prev.map((a) =>
+        a.id === appointmentId
+          ? { ...a, reviewed: true, reviewRating: rating, updatedAt: new Date().toISOString() }
+          : a
+      )
+    );
+
+    // Save to reviewed list in localStorage
+    const updatedReviewed = [...reviewedAppointmentIds, appointmentId];
+    setReviewedAppointmentIds(updatedReviewed);
+    localStorage.setItem(LOCAL_STORAGE_REVIEWED_KEY, JSON.stringify(updatedReviewed));
+
+    // 3. Save to Firestore
+    try {
+      await setDoc(doc(db, 'reviews', newRevId), newRev);
+      await updateDoc(doc(db, 'appointments', appointmentId), {
+        reviewed: true,
+        reviewRating: rating,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Update Barber rating & reviewsCount dynamically
+      const targetBarber = barbers.find((b) => b.id === targetApp.barberId);
+      if (targetBarber) {
+        const barberReviews = [...reviews.filter((r) => r.barberId === targetBarber.id), newRev];
+        const newAvg = parseFloat(
+          (barberReviews.reduce((acc, r) => acc + r.rating, 0) / barberReviews.length).toFixed(1)
+        );
+        const newCount = barberReviews.length;
+
+        setBarbers((prev) =>
+          prev.map((b) => (b.id === targetBarber.id ? { ...b, rating: newAvg, reviewsCount: newCount } : b))
+        );
+
+        await updateDoc(doc(db, 'barbers', targetBarber.id), {
+          rating: newAvg,
+          reviewsCount: newCount,
+        });
+      }
+
+      addNotification(
+        'avaliacao',
+        'Nova Avaliação de Cliente',
+        `${newRev.authorName} enviou uma nota ${rating}/5 ⭐ para o atendimento com ${targetApp.barberName}.`
+      );
+    } catch (e) {
+      console.warn('Review saved locally', e);
+    }
+
+    addToast('Obrigado pela sua avaliação! Seu feedback é fundamental.', 'success');
+    setIsReviewModalOpen(false);
+    setManualReviewAppointment(null);
+    return true;
+  };
+
+  const dismissAppointmentReview = (appointmentId: string) => {
+    const updated = [...dismissedReviewIds, appointmentId];
+    setDismissedReviewIds(updated);
+    localStorage.setItem(LOCAL_STORAGE_DISMISSED_REVIEW_KEY, JSON.stringify(updated));
+    setIsReviewModalOpen(false);
+    setManualReviewAppointment(null);
+  };
+
+  const setPendingReviewAppointment = (app: Appointment | null) => {
+    setManualReviewAppointment(app);
+    if (app) {
+      setIsReviewModalOpen(true);
+    }
+  };
+
   // SETTINGS
   const updateSettings = async (newSettings: Partial<BarbershopInfo>): Promise<boolean> => {
     const updated = { ...barbershopInfo, ...newSettings };
@@ -1510,6 +1954,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addReview,
         updateReviewStatus,
         deleteReview,
+        pendingReviewAppointment,
+        setPendingReviewAppointment,
+        isReviewModalOpen,
+        setIsReviewModalOpen,
+        submitAppointmentReview,
+        dismissAppointmentReview,
+        reviewedAppointmentIds,
         updateSettings,
         markNotificationRead,
         clearNotifications,

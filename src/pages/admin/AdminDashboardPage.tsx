@@ -24,6 +24,8 @@ export const AdminDashboardPage: React.FC = () => {
     updateAppointmentStatus,
     barbers,
     services,
+    customers,
+    currentUser,
     products,
     setActivePage,
     addToast,
@@ -51,7 +53,7 @@ export const AdminDashboardPage: React.FC = () => {
   const pendingToday = todayAppointments.filter((a) => a.status === 'Agendado' || a.status === 'Confirmado').length;
   const inProgressToday = todayAppointments.filter((a) => a.status === 'Em atendimento').length;
 
-  // Chart data: Last 7 days revenue
+  // Chart data: Last 7 days revenue (100% real data from appointments)
   const last7DaysData = Array.from({ length: 7 }).map((_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
@@ -66,15 +68,19 @@ export const AdminDashboardPage: React.FC = () => {
     return {
       day: dayLabel.toUpperCase(),
       date: dateFormatted,
-      valor: dayTotal || (i === 6 ? todayRevenue : Math.floor(Math.random() * 200 + 150)),
+      valor: dayTotal,
     };
   });
 
-  // Chart data: Category distribution
+  // Chart data: Category distribution (100% real data)
+  const cortesCount = appointments.filter((a) => !a.isCombo && a.status === 'Concluído').length;
+  const combosCount = appointments.filter((a) => a.isCombo && a.status === 'Concluído').length;
+  const produtosCount = products.reduce((acc, p) => acc + (p.salesCount || 0), 0);
+
   const pieData = [
-    { name: 'Cortes', value: appointments.filter((a) => !a.isCombo).length || 12, color: '#DAA520' },
-    { name: 'Combos VIP', value: appointments.filter((a) => a.isCombo).length || 8, color: '#3b82f6' },
-    { name: 'Produtos', value: products.reduce((acc, p) => acc + p.salesCount, 0) || 5, color: '#10b981' },
+    { name: 'Cortes', value: cortesCount, color: '#DAA520' },
+    { name: 'Combos VIP', value: combosCount, color: '#3b82f6' },
+    { name: 'Produtos', value: produtosCount, color: '#10b981' },
   ];
 
   return (
@@ -307,7 +313,24 @@ export const AdminDashboardPage: React.FC = () => {
               <p className="text-xs font-mono text-neutral-400">Nenhum agendamento encontrado para este filtro hoje.</p>
             </div>
           ) : (
-            filteredAppointments.map((app) => (
+            filteredAppointments.map((app) => {
+              const matchedCustomer = customers.find(
+                (c) =>
+                  c.id === app.customerId ||
+                  (c.phone && c.phone === app.customerPhone) ||
+                  c.name.toLowerCase() === app.customerName.toLowerCase()
+              );
+              const customerAvatarSrc =
+                app.customerAvatar ||
+                matchedCustomer?.avatar ||
+                matchedCustomer?.photo ||
+                (currentUser &&
+                (currentUser.name.toLowerCase() === app.customerName.toLowerCase() ||
+                  currentUser.phone === app.customerPhone)
+                  ? currentUser.avatar
+                  : '');
+
+              return (
               <div
                 key={app.id}
                 className="bg-neutral-900/80 hover:bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all"
@@ -319,22 +342,37 @@ export const AdminDashboardPage: React.FC = () => {
                     <div className="text-[10px] text-neutral-500 font-mono">até {app.endTime}</div>
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-white font-sans">{app.customerName}</span>
-                      <span className="text-xs text-neutral-400 font-mono">({app.customerPhone})</span>
-                    </div>
+                  <div className="flex items-start gap-3">
+                    {/* Customer Photo / Avatar */}
+                    {customerAvatarSrc ? (
+                      <img
+                        src={customerAvatarSrc}
+                        alt={app.customerName}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-amber-500/50 shadow-md shrink-0 mt-0.5"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-amber-400 font-bold font-mono text-xs shrink-0 mt-0.5">
+                        {app.customerName ? app.customerName.charAt(0).toUpperCase() : 'C'}
+                      </div>
+                    )}
 
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-300">
-                      <span className="font-semibold text-amber-400">
-                        {app.services.map((s) => s.name).join(', ')}
-                      </span>
-                      <span>•</span>
-                      <span className="text-neutral-400">Barbeiro: {app.barberName}</span>
-                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-white font-sans">{app.customerName}</span>
+                        <span className="text-xs text-neutral-400 font-mono">({app.customerPhone})</span>
+                      </div>
 
-                    <div className="text-xs font-mono font-bold text-white">
-                      R$ {app.totalPrice.toFixed(2)} • {app.totalDuration} min
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-300">
+                        <span className="font-semibold text-amber-400">
+                          {app.services.map((s) => s.name).join(', ')}
+                        </span>
+                        <span>•</span>
+                        <span className="text-neutral-400">Barbeiro: {app.barberName}</span>
+                      </div>
+
+                      <div className="text-xs font-mono font-bold text-white">
+                        R$ {app.totalPrice.toFixed(2)} • {app.totalDuration} min
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -398,7 +436,8 @@ export const AdminDashboardPage: React.FC = () => {
 
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 

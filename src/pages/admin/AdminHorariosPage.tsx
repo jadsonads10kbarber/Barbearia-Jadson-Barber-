@@ -579,6 +579,24 @@ export const AdminHorariosPage: React.FC = () => {
 
         </div>
 
+        {/* Bottom Save Action Bar inside Day Card */}
+        <div className="pt-4 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs text-neutral-400 font-sans flex items-center gap-1.5">
+            <Info className="w-4 h-4 text-[#DAA520]" />
+            <span>Lembre-se de clicar em salvar para propagar as alterações para todos os clientes em tempo real.</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveSchedule}
+            disabled={isSubmitting}
+            className="py-2.5 px-6 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg cursor-pointer disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isSubmitting ? 'Salvando...' : `Salvar Horários de ${currentDayConfig.dayName}`}</span>
+          </button>
+        </div>
+
       </div>
 
       {/* Blocked Dates Management Card */}

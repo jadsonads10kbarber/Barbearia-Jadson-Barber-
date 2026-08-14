@@ -14,6 +14,7 @@ import {
   Check,
   Plus,
   Trash2,
+  Star,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Appointment, ServiceItem, AppointmentService } from '../types';
@@ -30,6 +31,7 @@ import { Sparkles } from 'lucide-react';
 export const MeusAgendamentosPage: React.FC = () => {
   const {
     appointments,
+    currentUser,
     cancelAppointment,
     rescheduleAppointment,
     updateAppointmentServices,
@@ -39,6 +41,8 @@ export const MeusAgendamentosPage: React.FC = () => {
     services,
     setActivePage,
     addToast,
+    setPendingReviewAppointment,
+    reviewedAppointmentIds,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'proximos' | 'historico'>('proximos');
@@ -357,8 +361,19 @@ export const MeusAgendamentosPage: React.FC = () => {
                   <span className="text-[10px] uppercase text-amber-400 font-bold block">
                     Barbeiro
                   </span>
-                  <span className="text-sm font-bold text-white font-mono flex items-center gap-1.5 mt-0.5">
-                    <User className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm font-bold text-white font-mono flex items-center gap-2 mt-0.5">
+                    {(() => {
+                      const matchedBarber = barbers.find((b) => b.id === app.barberId || b.name === app.barberName);
+                      return matchedBarber?.photo ? (
+                        <img
+                          src={matchedBarber.photo}
+                          alt={app.barberName}
+                          className="w-5 h-5 rounded-full object-cover border border-amber-500/40 shrink-0"
+                        />
+                      ) : (
+                        <User className="w-4 h-4 text-gray-400 shrink-0" />
+                      );
+                    })()}
                     {app.barberName}
                   </span>
                 </div>
@@ -422,14 +437,33 @@ export const MeusAgendamentosPage: React.FC = () => {
 
               {/* Actions for History tab */}
               {activeTab === 'historico' && (
-                <div className="pt-2 flex justify-end border-t border-neutral-800/80">
+                <div className="pt-2.5 flex items-center justify-between gap-2 border-t border-neutral-800/80 flex-wrap">
+                  {isCompleted && (
+                    <div>
+                      {app.reviewed || reviewedAppointmentIds.includes(app.id) ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#DAA520]/10 border border-[#DAA520]/30 text-[#DAA520] text-xs font-bold font-mono">
+                          <Star className="w-3.5 h-3.5 fill-[#DAA520]" />
+                          <span>Avaliado ({app.reviewRating || 5}/5)</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setPendingReviewAppointment(app)}
+                          className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#DAA520] to-[#b38615] hover:from-[#c4931a] hover:to-[#a3770f] text-black font-extrabold text-xs uppercase flex items-center gap-1.5 transition-all shadow-md shadow-[#DAA520]/20 cursor-pointer active:scale-95"
+                        >
+                          <Star className="w-3.5 h-3.5 fill-black stroke-black" />
+                          <span>Avaliar Atendimento</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   <button
                     onClick={() => deleteAppointment(app.id)}
-                    className="py-1.5 px-3 rounded-xl bg-neutral-800/80 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 font-bold text-xs uppercase flex items-center gap-1.5 transition-colors border border-neutral-700 hover:border-rose-500/30"
+                    className="py-1.5 px-3 rounded-xl bg-neutral-900 hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 font-bold text-xs uppercase flex items-center gap-1.5 transition-colors border border-neutral-800 hover:border-rose-500/30 ml-auto cursor-pointer"
                     title="Excluir este item do histórico"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Excluir do Histórico</span>
+                    <span>Excluir</span>
                   </button>
                 </div>
               )}

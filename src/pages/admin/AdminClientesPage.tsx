@@ -67,35 +67,53 @@ export const AdminClientesPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((c) => (
-                  <tr key={c.id} className="hover:bg-neutral-900/50 transition-colors">
-                    <td className="p-4">
-                      <div className="font-bold text-sm text-white font-sans">{c.name}</div>
-                      <div className="text-[10px] text-neutral-500">Cadastrado em {c.createdAt}</div>
-                    </td>
-                    <td className="p-4 space-y-0.5">
-                      <div className="text-neutral-300 font-bold">{c.phone}</div>
-                      <div className="text-[11px] text-neutral-400">{c.email}</div>
-                    </td>
-                    <td className="p-4">
-                      <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold">
-                        {c.totalAppointments} visitas
-                      </span>
-                    </td>
-                    <td className="p-4 font-bold text-emerald-400">
-                      R$ {c.totalSpent.toFixed(2)}
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => setSelectedCustomer(c)}
-                        className="py-1.5 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-amber-400 font-bold text-[11px] uppercase transition-colors inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        <span>Histórico</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                filteredCustomers.map((c) => {
+                  const avatarSrc = c.avatar || c.photo;
+                  return (
+                    <tr key={c.id} className="hover:bg-neutral-900/50 transition-colors">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          {avatarSrc ? (
+                            <img
+                              src={avatarSrc}
+                              alt={c.name}
+                              className="w-10 h-10 rounded-full object-cover border-2 border-amber-500/40 shadow-sm shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-amber-400 font-bold font-mono text-sm shrink-0">
+                              {c.name ? c.name.charAt(0).toUpperCase() : 'C'}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-bold text-sm text-white font-sans">{c.name}</div>
+                            <div className="text-[10px] text-neutral-500">Cadastrado em {c.createdAt}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 space-y-0.5">
+                        <div className="text-neutral-300 font-bold">{c.phone}</div>
+                        <div className="text-[11px] text-neutral-400">{c.email}</div>
+                      </td>
+                      <td className="p-4">
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold">
+                          {c.totalAppointments} visitas
+                        </span>
+                      </td>
+                      <td className="p-4 font-bold text-emerald-400">
+                        R$ {c.totalSpent.toFixed(2)}
+                      </td>
+                      <td className="p-4 text-right">
+                        <button
+                          onClick={() => setSelectedCustomer(c)}
+                          className="py-1.5 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-amber-400 font-bold text-[11px] uppercase transition-colors inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Histórico</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -107,8 +125,18 @@ export const AdminClientesPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-lg bg-[#111111] border border-neutral-800 rounded-3xl p-6 space-y-4 relative shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <div className="flex items-center gap-2">
-                <ContactRound className="w-5 h-5 text-[#DAA520]" />
+              <div className="flex items-center gap-3">
+                {selectedCustomer.avatar || selectedCustomer.photo ? (
+                  <img
+                    src={selectedCustomer.avatar || selectedCustomer.photo}
+                    alt={selectedCustomer.name}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-amber-500 shadow-md shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-amber-400 font-bold font-mono text-base shrink-0">
+                    {selectedCustomer.name ? selectedCustomer.name.charAt(0).toUpperCase() : 'C'}
+                  </div>
+                )}
                 <div>
                   <h3 className="text-sm font-mono font-bold uppercase text-white">{selectedCustomer.name}</h3>
                   <p className="text-[11px] text-neutral-400 font-mono">{selectedCustomer.phone} • {selectedCustomer.email}</p>

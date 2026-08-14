@@ -78,19 +78,48 @@ export const AdminEquipePage: React.FC = () => {
   const [status, setStatus] = useState<'available' | 'busy' | 'off'>('available');
   const [active, setActive] = useState<boolean>(true);
   const [employmentStatus, setEmploymentStatus] = useState<'Admitido' | 'Demitido'>('Admitido');
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Handle Photo File Upload from Device
+  // Handle Photo File Upload with Auto-Optimization & Compression
   const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        addToast('A imagem deve ter no máximo 5MB.', 'error');
+      if (file.size > 10 * 1024 * 1024) {
+        addToast('A imagem deve ter no máximo 10MB.', 'error');
         return;
       }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhoto(reader.result as string);
-        addToast('Foto recarregada do dispositivo com sucesso!', 'success');
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 400;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.85);
+            setPhoto(compressed);
+            addToast('Foto otimizada e carregada com sucesso!', 'success');
+          } else {
+            setPhoto(event.target?.result as string);
+          }
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -152,46 +181,55 @@ export const AdminEquipePage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
 
-    const specialties = specialtiesText
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    try {
+      const specialties = specialtiesText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
 
-    const barberPayload: Partial<Barber> = {
-      name: name.trim() || 'Barbeiro Sem Nome',
-      role: role.trim() || 'Barbeiro Especialista',
-      photo: photo.trim() || 'https://images.unsplash.com/photo-1503443207922-dff7d543fd0e?w=500&auto=format&fit=crop&q=80',
-      phone: phone1.trim(),
-      phone1: phone1.trim(),
-      phone2: phone2.trim(),
-      cpf: cpf.trim(),
-      cnpj: cnpj.trim(),
-      pixKey: pixKey.trim(),
-      email: email.trim(),
-      address: address.trim(),
-      specialties,
-      serviceCommission: parseFloat(serviceCommission) || 0,
-      salesCommission: parseFloat(salesCommission) || 0,
-      salary: parseFloat(salary) || 0,
-      rating: editingBarber ? editingBarber.rating : 5.0,
-      reviewsCount: editingBarber ? editingBarber.reviewsCount : 0,
-      status,
-      active,
-      employmentStatus,
-      workingHours: { start: workStart, end: workEnd },
-      lunchBreak: { start: lunchStart, end: lunchEnd },
-      workingDays: editingBarber?.workingDays || [0, 1, 2, 3, 4, 5, 6],
-      notes: notes.trim(),
-    };
+      const barberPayload: Partial<Barber> = {
+        name: name.trim() || 'Barbeiro Sem Nome',
+        role: role.trim() || 'Barbeiro Especialista',
+        photo: photo.trim() || 'https://images.unsplash.com/photo-1503443207922-dff7d543fd0e?w=500&auto=format&fit=crop&q=80',
+        phone: phone1.trim() || '(11) 99999-0000',
+        phone1: phone1.trim() || '(11) 99999-0000',
+        phone2: phone2.trim(),
+        cpf: cpf.trim(),
+        cnpj: cnpj.trim(),
+        pixKey: pixKey.trim(),
+        email: email.trim(),
+        address: address.trim(),
+        specialties: specialties.length > 0 ? specialties : ['Degradê', 'Barboterapia'],
+        serviceCommission: parseFloat(serviceCommission) || 0,
+        salesCommission: parseFloat(salesCommission) || 0,
+        salary: parseFloat(salary) || 0,
+        rating: editingBarber ? editingBarber.rating : 5.0,
+        reviewsCount: editingBarber ? editingBarber.reviewsCount : 0,
+        status,
+        active,
+        employmentStatus,
+        workingHours: { start: workStart || '08:00', end: workEnd || '20:00' },
+        lunchBreak: { start: lunchStart || '12:00', end: lunchEnd || '13:00' },
+        workingDays: editingBarber?.workingDays || [0, 1, 2, 3, 4, 5, 6],
+        notes: notes.trim(),
+      };
 
-    if (editingBarber) {
-      await updateBarber(editingBarber.id, barberPayload);
-    } else {
-      await addBarber(barberPayload as Omit<Barber, 'id'>);
+      if (editingBarber) {
+        await updateBarber(editingBarber.id, barberPayload);
+      } else {
+        await addBarber(barberPayload as Omit<Barber, 'id'>);
+      }
+
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Error saving barber:', err);
+      addToast('Erro ao salvar barbeiro. Tente novamente.', 'error');
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsModalOpen(false);
   };
 
   // Quick Action: Toggle Ativado / Desativado
@@ -940,9 +978,17 @@ export const AdminEquipePage: React.FC = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-3.5 px-4 rounded-2xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono font-bold text-xs uppercase tracking-wider transition-colors shadow-xl cursor-pointer"
+                disabled={isSaving}
+                className="w-full py-3.5 px-4 rounded-2xl bg-[#DAA520] hover:bg-[#c9951b] disabled:opacity-50 disabled:cursor-not-allowed text-black font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-xl cursor-pointer flex items-center justify-center gap-2"
               >
-                {editingBarber ? 'Salvar Alterações do Barbeiro' : 'Cadastrar Barbeiro'}
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <span>Salvando Barbeiro...</span>
+                  </>
+                ) : (
+                  <span>{editingBarber ? 'Salvar Alterações do Barbeiro' : 'Cadastrar Barbeiro'}</span>
+                )}
               </button>
             </form>
           </div>

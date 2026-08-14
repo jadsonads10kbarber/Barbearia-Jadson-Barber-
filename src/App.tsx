@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
+import { ClientReviewModal } from './components/ClientReviewModal';
 
 import { AgendamentoPage } from './pages/AgendamentoPage';
 import { MeusAgendamentosPage } from './pages/MeusAgendamentosPage';
@@ -95,6 +96,9 @@ const AppContent: React.FC = () => {
 
       {/* PWA Install Banner */}
       <PwaInstallPrompt />
+
+      {/* Interactive Client Review Modal / Floating Prompt */}
+      <ClientReviewModal />
     </div>
   );
 };

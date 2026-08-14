@@ -668,9 +668,10 @@ export const AgendamentoPage: React.FC = () => {
 
     try {
       const created = await addAppointment({
-        customerId: 'cust-local',
+        customerId: currentUser?.id || 'cust-local',
         customerName,
         customerPhone,
+        customerAvatar: currentUser?.avatar || '',
         barberId: selectedBarber.id,
         barberName: selectedBarber.name,
         date: selectedDate,
@@ -973,90 +974,104 @@ export const AgendamentoPage: React.FC = () => {
           </div>
 
           {/* Barbers Cards List */}
-          <div className="grid grid-cols-1 gap-3">
-            {barbers.map((barber) => {
-              const isSelected = selectedBarber?.id === barber.id;
+          {barbers.length === 0 ? (
+            <div className="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center space-y-3">
+              <User className="w-10 h-10 text-[#DAA520] mx-auto opacity-70" />
+              <h3 className="text-sm font-bold text-white font-sans">Nenhum Barbeiro Cadastrado</h3>
+              <p className="text-xs text-[#8E9299] max-w-xs mx-auto">
+                No momento não há profissionais cadastrados na equipe. Cadastre novos barbeiros no Painel Admin.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {barbers.map((barber) => {
+                const isSelected = selectedBarber?.id === barber.id;
 
-              return (
-                <div
-                  key={barber.id}
-                  onClick={() => {
-                    setSelectedBarber(barber);
-                    setSelectedTimeSlot(null);
-                  }}
-                  className={`p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer relative flex flex-row gap-3 items-center ${
-                    isSelected
-                      ? 'bg-[#111111] border-[#DAA520] ring-1 ring-[#DAA520]/40 shadow-md'
-                      : 'bg-[#111111]/80 border-white/5 hover:border-white/20'
-                  }`}
-                >
-                  {/* Selected Badge Icon */}
-                  {isSelected && (
-                    <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-[#DAA520] text-black flex items-center justify-center font-bold shadow-sm">
-                      <Check className="w-3 h-3 stroke-[3]" />
+                return (
+                  <div
+                    key={barber.id}
+                    onClick={() => {
+                      setSelectedBarber(barber);
+                      setSelectedTimeSlot(null);
+                    }}
+                    className={`p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer relative flex flex-row gap-3 items-center ${
+                      isSelected
+                        ? 'bg-[#111111] border-[#DAA520] ring-1 ring-[#DAA520]/40 shadow-md'
+                        : 'bg-[#111111]/80 border-white/5 hover:border-white/20'
+                    }`}
+                  >
+                    {/* Selected Badge Icon */}
+                    {isSelected && (
+                      <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-[#DAA520] text-black flex items-center justify-center font-bold shadow-sm">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </div>
+                    )}
+
+                    {/* Photo */}
+                    <div className="relative shrink-0">
+                      <img
+                        src={barber.photo}
+                        alt={barber.name}
+                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg object-cover border border-white/10"
+                      />
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-md text-[#DAA520] text-[8px] font-bold px-1 py-0.2 rounded border border-[#DAA520]/30 font-sans whitespace-nowrap">
+                        {barber.rating || 5.0} ★
+                      </span>
                     </div>
-                  )}
 
-                  {/* Photo */}
-                  <div className="relative shrink-0">
-                    <img
-                      src={barber.photo}
-                      alt={barber.name}
-                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg object-cover border border-white/10"
-                    />
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-md text-[#DAA520] text-[8px] font-bold px-1 py-0.2 rounded border border-[#DAA520]/30 font-sans whitespace-nowrap">
-                      {barber.rating} ★
-                    </span>
-                  </div>
+                    {/* Info */}
+                    <div className="flex-1 space-y-0.5 min-w-0">
+                      <div className="pr-6 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs sm:text-sm font-bold text-white font-sans">{barber.name}</h3>
+                          <span className="text-[10px] text-[#DAA520] font-medium">• {barber.role}</span>
+                        </div>
+                      </div>
 
-                  {/* Info */}
-                  <div className="flex-1 space-y-0.5 min-w-0">
-                    <div className="pr-6 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-xs sm:text-sm font-bold text-white font-sans">{barber.name}</h3>
-                        <span className="text-[10px] text-[#DAA520] font-medium">• {barber.role}</span>
+                      <p className="text-[11px] text-[#8E9299] line-clamp-1">{barber.description}</p>
+
+                      {/* Specialties & Lunch Hours */}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5 text-[9px] text-[#8E9299] font-sans">
+                        {barber.workingHours && (
+                          <span className="flex items-center gap-1 text-gray-300">
+                            <Clock className="w-2.5 h-2.5 text-[#DAA520]" />
+                            {barber.workingHours.start}-{barber.workingHours.end}
+                          </span>
+                        )}
+                        {barber.lunchBreak && (
+                          <span className="text-[#DAA520]/90 font-medium">
+                            Almoço: {barber.lunchBreak.start}-{barber.lunchBreak.end}
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-[#8E9299] line-clamp-1">{barber.description}</p>
-
-                    {/* Specialties & Lunch Hours */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5 text-[9px] text-[#8E9299] font-sans">
-                      <span className="flex items-center gap-1 text-gray-300">
-                        <Clock className="w-2.5 h-2.5 text-[#DAA520]" />
-                        {barber.workingHours.start}-{barber.workingHours.end}
-                      </span>
-                      <span className="text-[#DAA520]/90 font-medium">
-                        Almoço: {barber.lunchBreak.start}-{barber.lunchBreak.end}
-                      </span>
+                    {/* Selection Action Button */}
+                    <div className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedBarber(barber);
+                          setSelectedTimeSlot(null);
+                          setCurrentStep(3);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg font-sans text-[11px] font-extrabold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#DAA520] text-black shadow-md shadow-[#DAA520]/30 hover:bg-[#c9951b]'
+                            : 'bg-[#DAA520]/15 hover:bg-[#DAA520] text-[#DAA520] hover:text-black border border-[#DAA520]/30 hover:border-[#DAA520] shadow-sm'
+                        }`}
+                      >
+                        <User className="w-3 h-3" />
+                        <span className="hidden sm:inline">{isSelected ? 'Selecionado' : 'Escolher'}</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Selection Action Button */}
-                  <div className="shrink-0">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedBarber(barber);
-                        setSelectedTimeSlot(null);
-                        setCurrentStep(3);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg font-sans text-[11px] font-extrabold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#DAA520] text-black shadow-md shadow-[#DAA520]/30 hover:bg-[#c9951b]'
-                          : 'bg-[#DAA520]/15 hover:bg-[#DAA520] text-[#DAA520] hover:text-black border border-[#DAA520]/30 hover:border-[#DAA520] shadow-sm'
-                      }`}
-                    >
-                      <User className="w-3 h-3" />
-                      <span className="hidden sm:inline">{isSelected ? 'Selecionado' : 'Escolher'}</span>
-                      <ChevronRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2.5 pt-2">
@@ -1346,17 +1361,21 @@ export const AgendamentoPage: React.FC = () => {
 
                 {filteredIndividual.length === 0 ? (
                   <div className="bg-[#111111]/90 border border-neutral-800 rounded-2xl p-6 text-center space-y-2">
-                    <Search className="w-7 h-7 text-gray-500 mx-auto" />
+                    <Scissors className="w-7 h-7 text-[#DAA520] mx-auto opacity-70" />
                     <p className="text-xs text-gray-300 font-sans">
-                      Nenhum serviço individual encontrado para <strong className="text-white">"{bookingSearchQuery}"</strong>
+                      {bookingSearchQuery
+                        ? `Nenhum serviço individual encontrado para "${bookingSearchQuery}"`
+                        : 'Nenhum serviço individual cadastrado no momento.'}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setBookingSearchQuery('')}
-                      className="py-1 px-3 rounded-lg bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-[11px] uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
-                    >
-                      Limpar Busca
-                    </button>
+                    {bookingSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setBookingSearchQuery('')}
+                        className="py-1 px-3 rounded-lg bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-[11px] uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
+                      >
+                        Limpar Busca
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1439,17 +1458,21 @@ export const AgendamentoPage: React.FC = () => {
 
                 {filteredCombos.length === 0 ? (
                   <div className="bg-[#111111]/90 border border-neutral-800 rounded-2xl p-6 text-center space-y-2">
-                    <Search className="w-7 h-7 text-gray-500 mx-auto" />
+                    <Scissors className="w-7 h-7 text-[#DAA520] mx-auto opacity-70" />
                     <p className="text-xs text-gray-300 font-sans">
-                      Nenhum combo promocional encontrado para <strong className="text-white">"{bookingSearchQuery}"</strong>
+                      {bookingSearchQuery
+                        ? `Nenhum combo promocional encontrado para "${bookingSearchQuery}"`
+                        : 'Nenhum combo promocional cadastrado no momento.'}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setBookingSearchQuery('')}
-                      className="py-1 px-3 rounded-lg bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-[11px] uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
-                    >
-                      Limpar Busca
-                    </button>
+                    {bookingSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setBookingSearchQuery('')}
+                        className="py-1 px-3 rounded-lg bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-[11px] uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
+                      >
+                        Limpar Busca
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-2.5">

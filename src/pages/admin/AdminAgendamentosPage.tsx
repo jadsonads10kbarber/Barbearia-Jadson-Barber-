@@ -33,6 +33,8 @@ export const AdminAgendamentosPage: React.FC = () => {
     appointments,
     barbers,
     services,
+    customers,
+    currentUser,
     blockedDates,
     barbershopInfo,
     addAppointment,
@@ -385,7 +387,24 @@ export const AdminAgendamentosPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          filteredAppointments.map((app) => (
+          filteredAppointments.map((app) => {
+            const matchedCustomer = customers.find(
+              (c) =>
+                c.id === app.customerId ||
+                (c.phone && c.phone === app.customerPhone) ||
+                c.name.toLowerCase() === app.customerName.toLowerCase()
+            );
+            const customerAvatarSrc =
+              app.customerAvatar ||
+              matchedCustomer?.avatar ||
+              matchedCustomer?.photo ||
+              (currentUser &&
+              (currentUser.name.toLowerCase() === app.customerName.toLowerCase() ||
+                currentUser.phone === app.customerPhone)
+                ? currentUser.avatar
+                : '');
+
+            return (
             <div
               key={app.id}
               className="bg-[#111111] border border-neutral-800 hover:border-neutral-700 rounded-2xl p-4 sm:p-5 transition-all shadow-lg space-y-4"
@@ -401,39 +420,54 @@ export const AdminAgendamentosPage: React.FC = () => {
                     <div className="text-[10px] text-neutral-300 font-mono mt-1 font-bold">{app.date}</div>
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-base text-white font-sans">{app.customerName}</span>
-                      <a
-                        href={`https://wa.me/55${app.customerPhone.replace(/\D/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-amber-400 hover:underline font-mono flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20"
-                      >
-                        <Phone className="w-3 h-3 text-amber-400" />
-                        <span>{app.customerPhone}</span>
-                      </a>
-                    </div>
-
-                    <div className="text-xs text-amber-400 font-bold flex items-center gap-1.5">
-                      <Scissors className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                      <span>{app.services.map((s) => s.name).join(' + ')}</span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 font-mono pt-1">
-                      <span>Barbeiro: <strong className="text-white">{app.barberName}</strong></span>
-                      <span>•</span>
-                      <span>Duração: <strong className="text-white">{app.totalDuration} min</strong></span>
-                      <span>•</span>
-                      <span>Valor: <strong className="text-amber-400 font-bold">R$ {app.totalPrice.toFixed(2)}</strong></span>
-                    </div>
-
-                    {app.notes && (
-                      <div className="text-xs text-neutral-300 font-mono bg-black/60 p-2 rounded-xl border border-white/5 mt-2 flex items-start gap-1.5">
-                        <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                        <span>Obs: {app.notes}</span>
+                  <div className="flex items-start gap-3">
+                    {/* Customer Photo / Avatar */}
+                    {customerAvatarSrc ? (
+                      <img
+                        src={customerAvatarSrc}
+                        alt={app.customerName}
+                        className="w-11 h-11 rounded-full object-cover border-2 border-amber-500/50 shadow-md shrink-0 mt-0.5"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-amber-400 font-bold font-mono text-sm shrink-0 mt-0.5">
+                        {app.customerName ? app.customerName.charAt(0).toUpperCase() : 'C'}
                       </div>
                     )}
+
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-base text-white font-sans">{app.customerName}</span>
+                        <a
+                          href={`https://wa.me/55${app.customerPhone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-amber-400 hover:underline font-mono flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20"
+                        >
+                          <Phone className="w-3 h-3 text-amber-400" />
+                          <span>{app.customerPhone}</span>
+                        </a>
+                      </div>
+
+                      <div className="text-xs text-amber-400 font-bold flex items-center gap-1.5">
+                        <Scissors className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                        <span>{app.services.map((s) => s.name).join(' + ')}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 font-mono pt-1">
+                        <span>Barbeiro: <strong className="text-white">{app.barberName}</strong></span>
+                        <span>•</span>
+                        <span>Duração: <strong className="text-white">{app.totalDuration} min</strong></span>
+                        <span>•</span>
+                        <span>Valor: <strong className="text-amber-400 font-bold">R$ {app.totalPrice.toFixed(2)}</strong></span>
+                      </div>
+
+                      {app.notes && (
+                        <div className="text-xs text-neutral-300 font-mono bg-black/60 p-2 rounded-xl border border-white/5 mt-2 flex items-start gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                          <span>Obs: {app.notes}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -554,7 +588,8 @@ export const AdminAgendamentosPage: React.FC = () => {
               </div>
 
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

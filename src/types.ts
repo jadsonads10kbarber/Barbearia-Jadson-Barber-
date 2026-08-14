@@ -63,6 +63,7 @@ export interface Appointment {
   customerId: string;
   customerName: string;
   customerPhone: string;
+  customerAvatar?: string;
   barberId: string;
   barberName: string;
   date: string; // YYYY-MM-DD
@@ -78,6 +79,8 @@ export interface Appointment {
   cancelledAt?: string;
   paymentMethod?: string;
   notes?: string;
+  reviewed?: boolean;
+  reviewRating?: number;
   rescheduleHistory?: {
     previousDate: string;
     previousTime: string;
@@ -114,6 +117,8 @@ export interface Customer {
   name: string;
   email: string;
   phone: string;
+  avatar?: string;
+  photo?: string;
   createdAt: string;
   totalAppointments: number;
   lastAppointmentDate?: string;
@@ -208,6 +213,7 @@ export interface Review {
   id: string;
   authorName: string;
   customerName?: string;
+  customerAvatar?: string;
   barberId?: string;
   barberName?: string;
   rating: number; // 1 to 5
@@ -243,6 +249,8 @@ export interface AdminNotification {
   message: string;
   date: string;
   read: boolean;
+  appointmentId?: string;
+  customerAvatar?: string;
 }
 
 export interface WeeklyDayConfig {
@@ -260,6 +268,7 @@ export interface WeeklyDayConfig {
 export interface BarbershopInfo {
   name: string;
   shortName?: string;
+  cep?: string;
   pixKey?: string;
   slogan: string;
   description: string;

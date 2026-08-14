@@ -108,16 +108,24 @@ export const ServicosPage: React.FC = () => {
 
           {individualServices.length === 0 ? (
             <div className="bg-[#111111]/90 border border-neutral-800 rounded-2xl p-8 text-center space-y-3">
-              <Search className="w-8 h-8 text-gray-500 mx-auto" />
+              <Scissors className="w-8 h-8 text-[#DAA520] mx-auto opacity-70" />
               <p className="text-sm text-gray-300 font-sans">
-                Nenhum serviço individual encontrado para <strong className="text-white">"{searchQuery}"</strong>
+                {searchQuery
+                  ? `Nenhum serviço individual encontrado para "${searchQuery}"`
+                  : 'Nenhum serviço individual cadastrado no momento.'}
               </p>
-              <button
-                onClick={() => setSearchQuery('')}
-                className="py-1.5 px-4 rounded-xl bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
-              >
-                Limpar Busca
-              </button>
+              {searchQuery ? (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="py-1.5 px-4 rounded-xl bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
+                >
+                  Limpar Busca
+                </button>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  Os serviços cadastrados no painel administrativo aparecerão aqui automaticamente.
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -171,16 +179,24 @@ export const ServicosPage: React.FC = () => {
 
           {comboServices.length === 0 ? (
             <div className="bg-[#111111]/90 border border-neutral-800 rounded-2xl p-8 text-center space-y-3">
-              <Search className="w-8 h-8 text-gray-500 mx-auto" />
-              <p className="text-sm text-[#DAA520] font-sans">
-                Nenhum combo promocional encontrado para <strong className="text-white">"{searchQuery}"</strong>
+              <Scissors className="w-8 h-8 text-[#DAA520] mx-auto opacity-70" />
+              <p className="text-sm text-gray-300 font-sans">
+                {searchQuery
+                  ? `Nenhum combo promocional encontrado para "${searchQuery}"`
+                  : 'Nenhum combo promocional cadastrado no momento.'}
               </p>
-              <button
-                onClick={() => setSearchQuery('')}
-                className="py-1.5 px-4 rounded-xl bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
-              >
-                Limpar Busca
-              </button>
+              {searchQuery ? (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="py-1.5 px-4 rounded-xl bg-[#DAA520]/20 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer border border-[#DAA520]/30"
+                >
+                  Limpar Busca
+                </button>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  Os combos cadastrados no painel administrativo aparecerão aqui automaticamente.
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3.5">
