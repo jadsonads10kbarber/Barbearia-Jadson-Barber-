@@ -39,6 +39,7 @@ import {
   Review,
   AdminNotification,
   AdminLog,
+  DeletedAppointmentRecord,
 } from '../types';
 import {
   initialBarbers,
@@ -70,6 +71,7 @@ export type ActivePage =
   | 'admin-dashboard'
   | 'admin-financeiro'
   | 'admin-agendamentos'
+  | 'admin-historico'
   | 'admin-feed'
   | 'admin-equipe'
   | 'admin-clientes'
@@ -95,6 +97,7 @@ interface AppContextType {
   services: ServiceItem[];
   feedPosts: FeedPost[];
   appointments: Appointment[];
+  deletedAppointments: DeletedAppointmentRecord[];
   customers: Customer[];
   insumos: InsumoItem[];
   products: SaleProduct[];
@@ -132,7 +135,11 @@ interface AppContextType {
   // Appointment actions
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Promise<Appointment>;
   updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => Promise<boolean>;
-  cancelAppointment: (appointmentId: string) => Promise<boolean>;
+  cancelAppointment: (
+    appointmentId: string,
+    cancelledBy?: 'admin' | 'cliente',
+    reason?: string
+  ) => Promise<boolean>;
   rescheduleAppointment: (
     appointmentId: string,
     newDate: string,
@@ -152,7 +159,17 @@ interface AppContextType {
     appointmentId: string,
     updatedData: Partial<Appointment>
   ) => Promise<boolean>;
-  deleteAppointment: (appointmentId: string) => Promise<boolean>;
+  deleteAppointment: (
+    appointmentId: string,
+    deletedBy?: 'admin' | 'cliente',
+    reason?: string
+  ) => Promise<boolean>;
+  restoreAppointment: (
+    recordOrAppId: string,
+    isFromDeletedCollection?: boolean
+  ) => Promise<boolean>;
+  permanentlyDeleteArchivedAppointment: (recordId: string) => Promise<boolean>;
+  clearAllArchivedHistory: (options?: { type?: 'all' | 'deleted' | 'cancelled' }) => Promise<boolean>;
   clearHistory: () => Promise<boolean>;
 
   // Barber actions
@@ -343,6 +360,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [services, setServices] = useState<ServiceItem[]>(initialServices);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(initialFeedPosts);
   const [appointments, setAppointments] = useState<Appointment[]>(sampleAppointments);
+  const [deletedAppointments, setDeletedAppointments] = useState<DeletedAppointmentRecord[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [insumos, setInsumos] = useState<InsumoItem[]>(initialInsumos);
   const [products, setProducts] = useState<SaleProduct[]>(initialSaleProducts);
@@ -725,6 +743,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (err) => handleFirestoreError(err, OperationType.LIST, 'adminLogs')
       );
       unsubs.push(logsUnsub);
+
+      // 15. Deleted Appointments history listener
+      const delApptsUnsub = onSnapshot(
+        collection(db, 'deletedAppointments'),
+        (snapshot) => {
+          const list: DeletedAppointmentRecord[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as DeletedAppointmentRecord));
+          list.sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
+          setDeletedAppointments(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'deletedAppointments')
+      );
+      unsubs.push(delApptsUnsub);
     } catch (e) {
       console.warn('Realtime listeners running with offline/fallback state:', e);
     }
@@ -1164,15 +1195,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const cancelAppointment = async (appointmentId: string): Promise<boolean> => {
+  const cancelAppointment = async (
+    appointmentId: string,
+    cancelledBy: 'admin' | 'cliente' = 'admin',
+    reason?: string
+  ): Promise<boolean> => {
     const target = appointments.find((a) => a.id === appointmentId);
+    const nowIso = new Date().toISOString();
+    const who = cancelledBy === 'cliente' ? (currentUser?.name || 'Cliente') : (adminUser?.name || 'Administrador');
+
     setAppointments((prev) =>
       prev.map((app) => {
         if (app.id === appointmentId) {
           return {
             ...app,
             status: 'Cancelado' as AppointmentStatus,
-            cancelledAt: new Date().toISOString(),
+            cancelledAt: nowIso,
+            cancelledBy,
+            cancelledByName: who,
+            cancellationReason: reason || app.cancellationReason || '',
           };
         }
         return app;
@@ -1182,15 +1223,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await updateDoc(doc(db, 'appointments', appointmentId), {
         status: 'Cancelado',
-        cancelledAt: new Date().toISOString(),
+        cancelledAt: nowIso,
+        cancelledBy,
+        cancelledByName: who,
+        cancellationReason: reason || '',
+        updatedAt: nowIso,
       });
       if (target) {
         addNotification(
           'cancelamento',
-          'Agendamento Cancelado',
-          `O agendamento de ${target.customerName} para ${target.date} às ${target.startTime} foi cancelado.`
+          `Agendamento Cancelado (${cancelledBy === 'cliente' ? 'pelo Cliente' : 'pelo ADM'})`,
+          `O agendamento de ${target.customerName} para ${target.date} às ${target.startTime} com ${target.barberName} foi cancelado por ${who}.${reason ? ` Motivo: ${reason}` : ''}`
         );
       }
+      addAdminLog(
+        'Cancelamento de Agendamento',
+        `Agendamento ${target ? `de ${target.customerName} (${target.date} ${target.startTime})` : appointmentId} cancelado por ${who}.${reason ? ` Motivo: ${reason}` : ''}`
+      );
     } catch (e) {
       console.warn('Cancellation updated locally', e);
     }
@@ -1300,14 +1349,167 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  const deleteAppointment = async (appointmentId: string): Promise<boolean> => {
+  const deleteAppointment = async (
+    appointmentId: string,
+    deletedBy: 'admin' | 'cliente' = 'admin',
+    reason?: string
+  ): Promise<boolean> => {
+    const target = appointments.find((app) => app.id === appointmentId);
+    const nowIso = new Date().toISOString();
+    const who = deletedBy === 'cliente' ? (currentUser?.name || 'Cliente') : (adminUser?.name || 'Administrador');
+
+    if (target) {
+      const delRecord: DeletedAppointmentRecord = {
+        id: `del-${target.id}-${Date.now()}`,
+        originalAppointmentId: target.id,
+        appointment: {
+          ...target,
+          deletedAt: nowIso,
+          deletedBy,
+          deletedByName: who,
+        },
+        deletedAt: nowIso,
+        deletedBy,
+        deletedByName: who,
+        reason: reason || '',
+      };
+
+      // Add to local state
+      setDeletedAppointments((prev) => [delRecord, ...prev]);
+
+      // Save to deletedAppointments in Firestore
+      try {
+        await setDoc(doc(db, 'deletedAppointments', delRecord.id), cleanFirestoreData(delRecord));
+      } catch (e) {
+        console.warn('Saved deleted record locally:', e);
+      }
+    }
+
+    // Remove from appointments
     setAppointments((prev) => prev.filter((app) => app.id !== appointmentId));
     try {
       await deleteDoc(doc(db, 'appointments', appointmentId));
+      addAdminLog(
+        'Exclusão de Agendamento',
+        `Agendamento ${target ? `de ${target.customerName} (${target.date} ${target.startTime})` : appointmentId} foi excluído por ${who}.${reason ? ` Motivo: ${reason}` : ''}`
+      );
     } catch (e) {
       console.warn('Deleted locally', e);
     }
-    addToast('Agendamento removido com sucesso.', 'info');
+    addToast('Agendamento excluído e arquivado no histórico.', 'info');
+    return true;
+  };
+
+  const restoreAppointment = async (
+    recordOrAppId: string,
+    isFromDeletedCollection: boolean = false
+  ): Promise<boolean> => {
+    if (isFromDeletedCollection) {
+      const record = deletedAppointments.find(
+        (d) => d.id === recordOrAppId || d.originalAppointmentId === recordOrAppId
+      );
+      if (!record) {
+        addToast('Registro excluído não encontrado.', 'error');
+        return false;
+      }
+
+      const restoredAppt: Appointment = {
+        ...record.appointment,
+        status: 'Agendado',
+        updatedAt: new Date().toISOString(),
+      };
+      delete restoredAppt.deletedAt;
+      delete restoredAppt.deletedBy;
+      delete restoredAppt.deletedByName;
+      delete restoredAppt.cancelledAt;
+      delete restoredAppt.cancelledBy;
+      delete restoredAppt.cancelledByName;
+      delete restoredAppt.cancellationReason;
+
+      setAppointments((prev) => [restoredAppt, ...prev.filter((a) => a.id !== restoredAppt.id)]);
+      setDeletedAppointments((prev) => prev.filter((d) => d.id !== record.id));
+
+      try {
+        await setDoc(doc(db, 'appointments', restoredAppt.id), cleanFirestoreData(restoredAppt));
+        await deleteDoc(doc(db, 'deletedAppointments', record.id));
+        addAdminLog('Restauração de Agendamento', `Agendamento ${restoredAppt.id} de ${restoredAppt.customerName} restaurado para "Agendado".`);
+        addToast(`Agendamento de ${restoredAppt.customerName} restaurado para "Agendado" com sucesso!`, 'success');
+        return true;
+      } catch (e) {
+        console.warn('Restored locally:', e);
+        addToast(`Agendamento de ${restoredAppt.customerName} restaurado localmente.`, 'success');
+        return true;
+      }
+    } else {
+      const target = appointments.find((a) => a.id === recordOrAppId);
+      if (!target) {
+        addToast('Agendamento não encontrado.', 'error');
+        return false;
+      }
+
+      const updatedData: Partial<Appointment> = {
+        status: 'Agendado',
+        updatedAt: new Date().toISOString(),
+        cancelledAt: '',
+        cancelledBy: undefined,
+        cancelledByName: '',
+        cancellationReason: '',
+      };
+
+      setAppointments((prev) =>
+        prev.map((app) => (app.id === recordOrAppId ? { ...app, ...updatedData } : app))
+      );
+
+      try {
+        await updateDoc(doc(db, 'appointments', recordOrAppId), cleanFirestoreData(updatedData));
+        addAdminLog('Restauração de Agendamento Cancelado', `Agendamento de ${target.customerName} reativado para "Agendado".`);
+        addToast(`Agendamento de ${target.customerName} reativado com sucesso!`, 'success');
+        return true;
+      } catch (e) {
+        console.warn('Restored locally:', e);
+        addToast(`Agendamento reativado localmente.`, 'success');
+        return true;
+      }
+    }
+  };
+
+  const permanentlyDeleteArchivedAppointment = async (recordId: string): Promise<boolean> => {
+    setDeletedAppointments((prev) => prev.filter((d) => d.id !== recordId));
+    try {
+      await deleteDoc(doc(db, 'deletedAppointments', recordId));
+      addAdminLog('Exclusão Permanente de Histórico', `Registro de histórico ${recordId} excluído definitivamente.`);
+    } catch (e) {
+      console.warn('Permanently deleted locally:', e);
+    }
+    addToast('Registro excluído definitivamente do histórico.', 'info');
+    return true;
+  };
+
+  const clearAllArchivedHistory = async (options?: { type?: 'all' | 'deleted' | 'cancelled' }): Promise<boolean> => {
+    const type = options?.type || 'all';
+
+    if (type === 'all' || type === 'deleted') {
+      const toDelete = [...deletedAppointments];
+      setDeletedAppointments([]);
+      for (const item of toDelete) {
+        try {
+          await deleteDoc(doc(db, 'deletedAppointments', item.id));
+        } catch (e) {}
+      }
+    }
+
+    if (type === 'all' || type === 'cancelled') {
+      const cancelledAppts = appointments.filter((a) => a.status === 'Cancelado');
+      setAppointments((prev) => prev.filter((a) => a.status !== 'Cancelado'));
+      for (const app of cancelledAppts) {
+        try {
+          await deleteDoc(doc(db, 'appointments', app.id));
+        } catch (e) {}
+      }
+    }
+
+    addAdminLog('Limpeza de Histórico', `Histórico de agendamentos (${type}) limpo com sucesso.`);
+    addToast('Histórico limpo com sucesso.', 'success');
     return true;
   };
 
@@ -2193,6 +2395,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         services,
         feedPosts,
         appointments,
+        deletedAppointments,
         customers,
         insumos,
         products,
@@ -2226,6 +2429,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rescheduleAppointment,
         updateAppointmentServices,
         deleteAppointment,
+        restoreAppointment,
+        permanentlyDeleteArchivedAppointment,
+        clearAllArchivedHistory,
         clearHistory,
         addBarber,
         updateBarber,

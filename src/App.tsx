@@ -33,6 +33,7 @@ import { AdminCuponsPage } from './pages/admin/AdminCuponsPage';
 import { AdminHorariosPage } from './pages/admin/AdminHorariosPage';
 import { AdminAvaliacoesPage } from './pages/admin/AdminAvaliacoesPage';
 import { AdminConfiguracoesPage } from './pages/admin/AdminConfiguracoesPage';
+import { AdminHistoricoPage } from './pages/admin/AdminHistoricoPage';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -53,6 +54,7 @@ const AppContent: React.FC = () => {
           {activePage === 'admin-dashboard' && <AdminDashboardPage />}
           {activePage === 'admin-financeiro' && <AdminFinanceiroPage />}
           {activePage === 'admin-agendamentos' && <AdminAgendamentosPage />}
+          {activePage === 'admin-historico' && <AdminHistoricoPage />}
           {activePage === 'admin-feed' && <AdminFeedPage />}
           {activePage === 'admin-equipe' && <AdminEquipePage />}
           {activePage === 'admin-clientes' && <AdminClientesPage />}

@@ -68,6 +68,19 @@
         "author": { "type": "string", "maxLength": 100 }
       },
       "required": ["title", "category", "content", "date", "likesCount", "author"]
+    },
+    "DeletedAppointmentRecord": {
+      "title": "DeletedAppointmentRecord",
+      "description": "Log of deleted and archived appointments",
+      "type": "object",
+      "properties": {
+        "originalAppointmentId": { "type": "string", "maxLength": 100 },
+        "deletedAt": { "type": "string" },
+        "deletedBy": { "type": "string", "enum": ["admin", "cliente"] },
+        "deletedByName": { "type": "string", "maxLength": 100 },
+        "reason": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["originalAppointmentId", "deletedAt", "deletedBy"]
     }
   },
   "firestore": {
@@ -86,6 +99,10 @@
     "/feed/{postId}": {
       "schema": { "$ref": "#/entities/FeedPost" },
       "description": "Barbershop feed posts"
+    },
+    "/deletedAppointments/{delId}": {
+      "schema": { "$ref": "#/entities/DeletedAppointmentRecord" },
+      "description": "Deleted and archived appointments audit log"
     }
   }
 }

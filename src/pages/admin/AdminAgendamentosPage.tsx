@@ -39,6 +39,7 @@ export const AdminAgendamentosPage: React.FC = () => {
     barbershopInfo,
     addAppointment,
     updateAppointmentStatus,
+    cancelAppointment,
     rescheduleAppointment,
     updateAppointment,
     deleteAppointment,
@@ -292,7 +293,7 @@ export const AdminAgendamentosPage: React.FC = () => {
 
   const handleConfirmDelete = async () => {
     if (!targetAppointment) return;
-    await deleteAppointment(targetAppointment.id);
+    await deleteAppointment(targetAppointment.id, 'admin', 'Excluído pelo Administrador no painel de agendamentos');
     setIsDeleteModalOpen(false);
     setTargetAppointment(null);
   };
@@ -562,7 +563,7 @@ export const AdminAgendamentosPage: React.FC = () => {
 
                 {/* 6. Cancelar */}
                 <button
-                  onClick={() => updateAppointmentStatus(app.id, 'Cancelado')}
+                  onClick={() => cancelAppointment(app.id, 'admin', 'Cancelado pelo Administrador no painel de agendamentos')}
                   disabled={app.status === 'Cancelado'}
                   className={`py-2 px-3 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
                     app.status === 'Cancelado'

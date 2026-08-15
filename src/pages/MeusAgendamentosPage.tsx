@@ -140,7 +140,7 @@ export const MeusAgendamentosPage: React.FC = () => {
   // Submit Cancel
   const handleConfirmCancel = async () => {
     if (cancelModalAppointment) {
-      await cancelAppointment(cancelModalAppointment.id);
+      await cancelAppointment(cancelModalAppointment.id, 'cliente', 'Cancelado pelo próprio cliente no aplicativo');
       setCancelModalAppointment(null);
     }
   };

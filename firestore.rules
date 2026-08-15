@@ -103,5 +103,10 @@ service cloud.firestore {
     match /notifications/{notifId} {
       allow read, write: if true;
     }
+
+    // Deleted Appointments History
+    match /deletedAppointments/{delId} {
+      allow read, write: if true;
+    }
   }
 }

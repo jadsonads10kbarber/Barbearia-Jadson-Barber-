@@ -77,6 +77,12 @@ export interface Appointment {
   createdAt: string;
   updatedAt?: string;
   cancelledAt?: string;
+  cancelledBy?: 'admin' | 'cliente' | 'sistema';
+  cancelledByName?: string;
+  cancellationReason?: string;
+  deletedAt?: string;
+  deletedBy?: 'admin' | 'cliente';
+  deletedByName?: string;
   paymentMethod?: string;
   notes?: string;
   reviewed?: boolean;
@@ -86,6 +92,16 @@ export interface Appointment {
     previousTime: string;
     changedAt: string;
   }[];
+}
+
+export interface DeletedAppointmentRecord {
+  id: string; // e.g. del-app-123
+  originalAppointmentId: string;
+  appointment: Appointment;
+  deletedAt: string;
+  deletedBy: 'admin' | 'cliente';
+  deletedByName?: string;
+  reason?: string;
 }
 
 export interface FeedPost {
