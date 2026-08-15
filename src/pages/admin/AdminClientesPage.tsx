@@ -23,13 +23,18 @@ export const AdminClientesPage: React.FC = () => {
   const filteredCustomers = customers.filter((c) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.email.toLowerCase().includes(q);
+    const name = c.name || '';
+    const phone = c.phone || '';
+    const email = c.email || '';
+    return name.toLowerCase().includes(q) || phone.includes(q) || email.toLowerCase().includes(q);
   });
 
   // Customer historical appointments
   const customerHistory = selectedCustomer
     ? appointments.filter(
-        (app) => app.customerName.toLowerCase() === selectedCustomer.name.toLowerCase() || app.customerPhone === selectedCustomer.phone
+        (app) =>
+          ((app.customerName || '').toLowerCase() === (selectedCustomer.name || '').toLowerCase()) ||
+          (selectedCustomer.phone && app.customerPhone === selectedCustomer.phone)
       )
     : [];
 
@@ -106,11 +111,11 @@ export const AdminClientesPage: React.FC = () => {
                       </td>
                       <td className="p-4">
                         <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold">
-                          {c.totalAppointments} visitas
+                          {c.totalAppointments || 0} visitas
                         </span>
                       </td>
                       <td className="p-4 font-bold text-emerald-400">
-                        R$ {c.totalSpent.toFixed(2)}
+                        R$ {(c.totalSpent || 0).toFixed(2)}
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -157,8 +162,8 @@ export const AdminClientesPage: React.FC = () => {
                   </div>
                 )}
                 <div>
-                  <h3 className="text-sm font-mono font-bold uppercase text-white">{selectedCustomer.name}</h3>
-                  <p className="text-[11px] text-neutral-400 font-mono">{selectedCustomer.phone} • {selectedCustomer.email}</p>
+                  <h3 className="text-sm font-mono font-bold uppercase text-white">{selectedCustomer.name || 'Cliente'}</h3>
+                  <p className="text-[11px] text-neutral-400 font-mono">{selectedCustomer.phone || '-'} • {selectedCustomer.email || '-'}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedCustomer(null)} className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900">
@@ -169,11 +174,11 @@ export const AdminClientesPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-black/60 rounded-2xl border border-neutral-800 text-center">
                 <div className="text-[10px] text-neutral-400 uppercase font-mono font-bold">Total Visitas</div>
-                <div className="text-xl font-black font-mono text-amber-400">{selectedCustomer.totalAppointments}</div>
+                <div className="text-xl font-black font-mono text-amber-400">{selectedCustomer.totalAppointments || 0}</div>
               </div>
               <div className="p-3 bg-black/60 rounded-2xl border border-neutral-800 text-center">
                 <div className="text-[10px] text-neutral-400 uppercase font-mono font-bold">Total Consumido</div>
-                <div className="text-xl font-black font-mono text-emerald-400">R$ {selectedCustomer.totalSpent.toFixed(2)}</div>
+                <div className="text-xl font-black font-mono text-emerald-400">R$ {(selectedCustomer.totalSpent || 0).toFixed(2)}</div>
               </div>
             </div>
 
@@ -193,9 +198,9 @@ export const AdminClientesPage: React.FC = () => {
                     <div key={app.id} className="p-3 bg-black/80 rounded-xl border border-neutral-800 space-y-1 text-xs font-mono">
                       <div className="flex justify-between font-bold text-white">
                         <span>{app.date} às {app.startTime}</span>
-                        <span className="text-amber-400">R$ {app.totalPrice.toFixed(2)}</span>
+                        <span className="text-amber-400">R$ {(app.totalPrice || 0).toFixed(2)}</span>
                       </div>
-                      <div className="text-neutral-400">{app.services.map((s) => s.name).join(', ')}</div>
+                      <div className="text-neutral-400">{(app.services || []).map((s) => s.name).join(', ')}</div>
                       <div className="flex justify-between text-[10px] text-neutral-500">
                         <span>Barbeiro: {app.barberName}</span>
                         <span className="uppercase text-emerald-400">{app.status}</span>

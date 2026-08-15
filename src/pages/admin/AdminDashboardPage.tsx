@@ -132,7 +132,7 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
           <div className="space-y-0.5">
             <div className="text-2xl font-black font-mono text-white">
-              R$ {todayRevenue.toFixed(2)}
+              R$ {(todayRevenue || 0).toFixed(2)}
             </div>
             <div className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
               <TrendingUp className="w-3 h-3" />
@@ -371,7 +371,7 @@ export const AdminDashboardPage: React.FC = () => {
                       </div>
 
                       <div className="text-xs font-mono font-bold text-white">
-                        R$ {app.totalPrice.toFixed(2)} • {app.totalDuration} min
+                        R$ {(app.totalPrice || 0).toFixed(2)} • {app.totalDuration || 30} min
                       </div>
                     </div>
                   </div>
@@ -421,7 +421,7 @@ export const AdminDashboardPage: React.FC = () => {
                       onClick={() => updateAppointmentStatus(app.id, 'Concluído')}
                       className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[11px] font-bold uppercase transition-colors cursor-pointer"
                     >
-                      Concluir (R$ {app.totalPrice.toFixed(2)})
+                      Concluir (R$ {(app.totalPrice || 0).toFixed(2)})
                     </button>
                   )}
 

@@ -458,7 +458,7 @@ export const AdminAgendamentosPage: React.FC = () => {
                         <span>•</span>
                         <span>Duração: <strong className="text-white">{app.totalDuration} min</strong></span>
                         <span>•</span>
-                        <span>Valor: <strong className="text-amber-400 font-bold">R$ {app.totalPrice.toFixed(2)}</strong></span>
+                        <span>Valor: <strong className="text-amber-400 font-bold">R$ {(app.totalPrice || 0).toFixed(2)}</strong></span>
                       </div>
 
                       {app.notes && (

@@ -582,7 +582,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'customers'),
         (snapshot) => {
           const list: Customer[] = [];
-          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Customer));
+          snapshot.forEach((d) => {
+            const data = d.data() || {};
+            list.push({
+              id: d.id,
+              name: data.name || '',
+              phone: data.phone || '',
+              email: data.email || '',
+              avatar: data.avatar || data.photo || '',
+              photo: data.photo || data.avatar || '',
+              createdAt: data.createdAt || '',
+              totalAppointments: typeof data.totalAppointments === 'number' ? data.totalAppointments : (Number(data.totalAppointments) || 0),
+              totalSpent: typeof data.totalSpent === 'number' ? data.totalSpent : (Number(data.totalSpent) || 0),
+              ...data,
+            } as Customer);
+          });
           setCustomers(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
