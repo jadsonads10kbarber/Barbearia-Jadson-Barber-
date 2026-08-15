@@ -182,36 +182,44 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
         )}
       </button>
 
+      {/* Mobile Backdrop Overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 sm:hidden"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
       {/* Dropdown Panel */}
       {isOpen && (
         <div
-          className={`absolute ${
-            align === 'right' ? 'right-0' : 'left-0'
-          } mt-2 w-[92vw] max-w-[420px] bg-[#111111] border border-neutral-800 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[600px] animate-fadeIn`}
-          style={{ boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7)' }}
+          className={`fixed left-2 right-2 top-16 z-50 max-w-[calc(100vw-16px)] mx-auto sm:max-w-[420px] sm:w-[420px] sm:absolute ${
+            align === 'right' ? 'sm:right-0 sm:left-auto' : 'sm:left-0 sm:right-auto'
+          } sm:top-full sm:mt-2 bg-[#111111] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[82vh] sm:max-h-[600px] animate-fadeIn`}
+          style={{ boxShadow: '0 20px 50px rgba(0, 0, 0, 0.85)' }}
         >
           {/* Panel Header */}
-          <div className="p-4 border-b border-neutral-800/80 bg-neutral-950 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#DAA520]/20 text-[#DAA520] border border-[#DAA520]/30 flex items-center justify-center">
+          <div className="p-3.5 sm:p-4 border-b border-neutral-800/80 bg-neutral-950 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-[#DAA520]/20 text-[#DAA520] border border-[#DAA520]/30 flex items-center justify-center shrink-0">
                 <Bell className="w-4 h-4" />
               </div>
-              <div>
-                <div className="text-xs font-black font-mono tracking-tight text-white uppercase flex items-center gap-2">
-                  <span>Central de Alertas</span>
+              <div className="min-w-0">
+                <div className="text-xs font-black font-mono tracking-tight text-white uppercase flex items-center gap-1.5 flex-wrap">
+                  <span className="truncate">Central de Alertas</span>
                   {unreadCount > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[#DAA520] text-[10px] font-bold">
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[#DAA520] text-[10px] font-bold shrink-0">
                       {unreadCount} nova{unreadCount > 1 ? 's' : ''}
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-neutral-400 font-mono">
+                <div className="text-[10px] text-neutral-400 font-mono truncate">
                   Sons em tempo real & Agendamentos
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={toggleSoundMuted}
                 className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
@@ -234,34 +242,34 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-neutral-800 bg-neutral-900/50 p-1.5 gap-1.5">
+          <div className="flex border-b border-neutral-800 bg-neutral-900/50 p-1.5 gap-1.5 shrink-0">
             <button
               onClick={() => setActiveTab('notifs')}
-              className={`flex-1 py-2 px-3 rounded-xl font-mono text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              className={`flex-1 py-2 px-2.5 rounded-xl font-mono text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
                 activeTab === 'notifs'
                   ? 'bg-neutral-800 text-[#DAA520] shadow-sm font-black'
                   : 'text-neutral-400 hover:text-white hover:bg-neutral-800/40'
               }`}
             >
-              <Bell className="w-3.5 h-3.5" />
-              <span>Notificações</span>
+              <Bell className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Notificações</span>
               {unreadCount > 0 && (
-                <span className="w-2 h-2 rounded-full bg-[#DAA520] animate-ping" />
+                <span className="w-2 h-2 rounded-full bg-[#DAA520] animate-ping shrink-0" />
               )}
             </button>
 
             <button
               onClick={() => setActiveTab('sound')}
-              className={`flex-1 py-2 px-3 rounded-xl font-mono text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              className={`flex-1 py-2 px-2.5 rounded-xl font-mono text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
                 activeTab === 'sound'
                   ? 'bg-neutral-800 text-[#DAA520] shadow-sm font-black'
                   : 'text-neutral-400 hover:text-white hover:bg-neutral-800/40'
               }`}
             >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Controle de Som</span>
+              <Sliders className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Controle de Som</span>
               {isSoundMuted && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-red-950 text-red-400 font-mono">
+                <span className="text-[9px] px-1 py-0.2 rounded bg-red-950 text-red-400 font-mono shrink-0">
                   MUDO
                 </span>
               )}
@@ -270,10 +278,10 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
 
           {/* Tab 1: Notifications List */}
           {activeTab === 'notifs' && (
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {/* Actions Bar */}
               {notifications.length > 0 && (
-                <div className="px-4 py-2 bg-neutral-950/60 border-b border-neutral-800/60 flex items-center justify-between text-xs">
+                <div className="px-3.5 py-2 bg-neutral-950/60 border-b border-neutral-800/60 flex items-center justify-between text-xs shrink-0">
                   <span className="text-neutral-400 font-mono text-[11px]">
                     Total: {notifications.length} registros
                   </span>
@@ -284,24 +292,24 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
                         className="text-[11px] text-amber-400 hover:text-amber-300 font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <CheckCheck className="w-3.5 h-3.5" />
-                        Marcar lidas
+                        <span>Marcar lidas</span>
                       </button>
                     )}
                     <button
                       onClick={clearNotifications}
-                      className="text-[11px] text-neutral-500 hover:text-red-400 font-mono flex items-center gap-1 cursor-pointer transition-colors ml-2"
+                      className="text-[11px] text-neutral-500 hover:text-red-400 font-mono flex items-center gap-1 cursor-pointer transition-colors ml-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      Limpar
+                      <span>Limpar</span>
                     </button>
                   </div>
                 </div>
               )}
 
               {/* Scrollable list */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
+              <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-2.5 max-h-[50vh] sm:max-h-[380px]">
                 {notifications.length === 0 ? (
-                  <div className="py-12 text-center space-y-3">
+                  <div className="py-12 text-center space-y-3 px-4">
                     <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-neutral-800 text-neutral-600 flex items-center justify-center mx-auto">
                       <Bell className="w-6 h-6" />
                     </div>
@@ -333,44 +341,42 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
                       <div
                         key={notif.id}
                         onClick={() => handleNotificationClick(notif)}
-                        className={`group relative p-3.5 rounded-xl border transition-all cursor-pointer ${
+                        className={`group relative p-3 sm:p-3.5 rounded-xl border transition-all cursor-pointer w-full min-w-0 ${
                           isUnread
                             ? 'bg-amber-950/25 border-amber-500/40 hover:bg-amber-950/35 shadow-sm'
                             : 'bg-neutral-900/40 border-neutral-800/70 hover:bg-neutral-800/40 text-neutral-400'
                         }`}
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
                           {/* Type Icon */}
-                          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-sm ${iconColor}`}>
+                          <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-sm ${iconColor}`}>
                             <IconComponent className="w-4 h-4" />
                           </div>
 
                           {/* Content */}
-                          <div className="flex-1 min-w-0 pr-6 text-left">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span
-                                  className={`text-xs font-mono tracking-tight truncate ${
-                                    isUnread ? 'text-white font-black' : 'text-neutral-300 font-bold'
-                                  }`}
-                                >
-                                  {notif.title}
-                                </span>
-                                {isUnread && (
-                                  <span className="inline-block w-2 h-2 rounded-full bg-[#DAA520] shrink-0 animate-pulse" />
-                                )}
-                              </div>
+                          <div className="flex-1 min-w-0 pr-7 text-left">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span
+                                className={`text-xs font-mono tracking-tight truncate ${
+                                  isUnread ? 'text-white font-black' : 'text-neutral-300 font-bold'
+                                }`}
+                              >
+                                {notif.title}
+                              </span>
+                              {isUnread && (
+                                <span className="inline-block w-2 h-2 rounded-full bg-[#DAA520] shrink-0 animate-pulse" />
+                              )}
                             </div>
 
                             <p
-                              className={`text-xs mt-1 leading-relaxed text-left break-words ${
+                              className={`text-[11px] sm:text-xs mt-1 leading-relaxed text-left break-words ${
                                 isUnread ? 'text-neutral-200' : 'text-neutral-400'
                               }`}
                             >
                               {notif.message}
                             </p>
 
-                            <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-neutral-800/50 text-[10px] text-neutral-500 font-mono">
+                            <div className="flex items-center justify-between gap-1.5 mt-2.5 pt-2 border-t border-neutral-800/50 text-[10px] text-neutral-500 font-mono flex-wrap">
                               <span className="shrink-0">{notif.date}</span>
                               {notif.type === 'agendamento' && (
                                 <span className="text-[#DAA520] font-bold flex items-center gap-1 hover:underline">

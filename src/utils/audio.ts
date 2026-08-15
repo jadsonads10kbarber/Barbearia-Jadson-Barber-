@@ -71,6 +71,8 @@ function playCustomDeviceAudio(audioDataUri: string, volume: number): void {
  * @param customAudioUri Optional base64 data URI of the custom device audio
  * @param forcePlay If true, ignores cooldown (e.g. for user preview/test button)
  */
+export const LOCAL_STORAGE_SOUND_MUTED_KEY = 'jadson_admin_sound_muted';
+
 export function playNotificationSound(
   volume = 80,
   isMuted = false,
@@ -78,7 +80,17 @@ export function playNotificationSound(
   customAudioUri?: string | null,
   forcePlay = false
 ): void {
-  if (isMuted || volume <= 0) return;
+  // If muted or volume 0, strictly return
+  if (!forcePlay) {
+    if (isMuted || volume <= 0) return;
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_SOUND_MUTED_KEY) === 'true') {
+        return;
+      }
+    } catch {}
+  } else if (volume <= 0) {
+    return;
+  }
 
   const nowMs = Date.now();
   if (!forcePlay && nowMs - lastSoundTime < SOUND_COOLDOWN_MS) {

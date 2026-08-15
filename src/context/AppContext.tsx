@@ -262,6 +262,7 @@ const LOCAL_STORAGE_USER_KEY = 'jadson_logged_user';
 const LOCAL_STORAGE_ADMIN_USER_KEY = 'jadson_admin_logged_user';
 const LOCAL_STORAGE_REVIEWED_KEY = 'jadson_reviewed_appts';
 const LOCAL_STORAGE_DISMISSED_REVIEW_KEY = 'jadson_dismissed_reviews';
+const LOCAL_STORAGE_BARBERSHOP_INFO_KEY = 'jadson_barbershop_info';
 const LOCAL_STORAGE_BARBERS_KEY = 'jadson_barbers_list';
 const LOCAL_STORAGE_SOUND_MUTED_KEY = 'jadson_admin_sound_muted';
 const LOCAL_STORAGE_SOUND_VOLUME_KEY = 'jadson_admin_sound_volume';
@@ -317,7 +318,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   // Core collections state initialized with default values, synced in real-time with Firestore
-  const [barbershopInfo, setBarbershopInfo] = useState<BarbershopInfo>(initialBarbershopInfo);
+  const [barbershopInfo, setBarbershopInfo] = useState<BarbershopInfo>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_BARBERSHOP_INFO_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.weeklySchedule)) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return initialBarbershopInfo;
+  });
   const [barbers, setBarbers] = useState<Barber[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_BARBERS_KEY);
@@ -659,7 +671,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         doc(db, 'settings', 'barbershopInfo'),
         (docSnap) => {
           if (docSnap.exists()) {
-            setBarbershopInfo(docSnap.data() as BarbershopInfo);
+            const data = docSnap.data() as BarbershopInfo;
+            setBarbershopInfo(data);
+            try {
+              localStorage.setItem(LOCAL_STORAGE_BARBERSHOP_INFO_KEY, JSON.stringify(data));
+            } catch (e) {}
           }
         },
         (err) => handleFirestoreError(err, OperationType.GET, 'settings/barbershopInfo')
@@ -809,7 +825,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         read: false,
       };
       await addDoc(collection(db, 'notifications'), notif);
-      playSoundRef.current();
     } catch (e) {
       console.error('Error creating notification:', e);
     }
@@ -1953,6 +1968,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSettings = async (newSettings: Partial<BarbershopInfo>): Promise<boolean> => {
     const updated = { ...barbershopInfo, ...newSettings };
     setBarbershopInfo(updated);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_BARBERSHOP_INFO_KEY, JSON.stringify(updated));
+    } catch (e) {}
 
     try {
       await setDoc(doc(db, 'settings', 'barbershopInfo'), updated);
@@ -2067,8 +2085,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const playNotificationSound = (type?: NotificationSoundType) => {
-    const isInAdmin = Boolean(adminUser && adminUser.role === 'admin') || activePage.startsWith('admin-');
-    if (!isInAdmin) return;
+    // Sound is strictly allowed ONLY when the user is actively viewing an Admin page
+    if (!activePage.startsWith('admin-')) return;
+    if (isSoundMuted || soundVolume <= 0) return;
     playAudioEffect(soundVolume, isSoundMuted, type || soundType, customSoundData);
   };
 
@@ -2077,16 +2096,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Tocando som de notificação...', 'info');
   };
 
-  // Keep playSoundRef in sync - CLIENTS WILL NEVER HEAR ADMIN NOTIFICATIONS
+  // Keep playSoundRef in sync - CLIENTS AND NON-ADMIN VIEWS ARE 100% SILENT
   useEffect(() => {
     playSoundRef.current = (type?: NotificationSoundType) => {
-      const isInAdmin = Boolean(adminUser && adminUser.role === 'admin') || activePage.startsWith('admin-');
-      if (!isInAdmin) {
-        return; // Client in public view: strictly silent
+      // Must be currently on an admin screen
+      if (!activePage.startsWith('admin-')) {
+        return;
+      }
+      if (isSoundMuted || soundVolume <= 0) {
+        return;
       }
       playAudioEffect(soundVolume, isSoundMuted, type || soundType, customSoundData);
     };
-  }, [soundVolume, isSoundMuted, soundType, customSoundData, adminUser, activePage]);
+  }, [soundVolume, isSoundMuted, soundType, customSoundData, activePage]);
 
   // Alert with sound when opening admin panel if there are unread notifications
   const hasAlertedPanelOpen = useRef(false);
@@ -2097,8 +2119,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const unreadCount = notifications.filter((n) => !n.read).length;
         if (unreadCount > 0 && !isSoundMuted && soundVolume > 0) {
           const timer = setTimeout(() => {
-            playAudioEffect(soundVolume, isSoundMuted, soundType, customSoundData);
-          }, 350);
+            if (activePage.startsWith('admin-') && !isSoundMuted && soundVolume > 0) {
+              playAudioEffect(soundVolume, isSoundMuted, soundType, customSoundData);
+            }
+          }, 400);
           return () => clearTimeout(timer);
         }
       }

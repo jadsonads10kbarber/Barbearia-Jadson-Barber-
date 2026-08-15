@@ -29,14 +29,14 @@ export const initialBarbershopInfo: BarbershopInfo = {
   hours: {
     weekdays: 'Segunda a Sexta: 08:00 às 20:00',
     saturday: 'Sábado: 08:00 às 19:00',
-    sunday: 'Domingo: Fechado',
+    sunday: 'Domingo: 09:00 às 14:00',
   },
   googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Rua+Curitiba%2C+401+-+Parque+Ip%C3%AA%2C+Feira+de+Santana+-+BA%2C+44086-402',
   weeklySchedule: [
     {
       dayOfWeek: 0,
       dayName: 'Domingo',
-      active: false,
+      active: true,
       startTime: '09:00',
       endTime: '14:00',
       lunchStart: '12:00',
