@@ -34,6 +34,8 @@ import { AdminHorariosPage } from './pages/admin/AdminHorariosPage';
 import { AdminAvaliacoesPage } from './pages/admin/AdminAvaliacoesPage';
 import { AdminConfiguracoesPage } from './pages/admin/AdminConfiguracoesPage';
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 const AppContent: React.FC = () => {
   const { activePage } = useApp();
 
@@ -105,10 +107,12 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppProvider>
-        <AppContent />
-      </AppProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AppProvider>
+          <AppContent />
+        </AppProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

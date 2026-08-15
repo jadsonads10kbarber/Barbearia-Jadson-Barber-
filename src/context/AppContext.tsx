@@ -462,6 +462,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const playSoundRef = useRef<(type?: NotificationSoundType) => void>(() => {});
   const isInitialApptsLoad = useRef(true);
+  const knownApptIds = useRef<Set<string>>(new Set());
+  const autoCompletedIds = useRef<Set<string>>(new Set());
 
   // Attach Firestore Realtime Listeners
   useEffect(() => {
@@ -473,22 +475,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'appointments'),
         (snapshot) => {
           const list: Appointment[] = [];
+          const currentIds = new Set<string>();
+
           snapshot.forEach((d) => {
-            list.push({ id: d.id, ...d.data() } as Appointment);
+            const data = d.data();
+            list.push({ id: d.id, ...data } as Appointment);
+            currentIds.add(d.id);
           });
+
           // Sort by date/startTime desc
           list.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
           setAppointments(list);
 
-          // Trigger sound effect for newly added appointments arriving in real-time
+          // Trigger sound effect ONLY for newly created appointments arriving after initial load
           if (!isInitialApptsLoad.current) {
-            const hasNewAdditions = snapshot.docChanges().some((change) => change.type === 'added');
-            if (hasNewAdditions) {
+            let hasNewCreatedAppt = false;
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added' && !knownApptIds.current.has(change.doc.id)) {
+                hasNewCreatedAppt = true;
+              }
+            });
+
+            if (hasNewCreatedAppt) {
               playSoundRef.current();
             }
           } else {
             isInitialApptsLoad.current = false;
           }
+
+          knownApptIds.current = currentIds;
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'appointments')
       );
@@ -702,6 +717,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const currentTimeStr = `${currentHours}:${currentMinutes}`;
 
       const toComplete = appointments.filter((app) => {
+        if (autoCompletedIds.current.has(app.id)) return false;
         if (app.status === 'Agendado' || app.status === 'Confirmado' || app.status === 'Em atendimento') {
           const isPastDate = app.date < todayDateStr;
           const isPastTimeToday = app.date === todayDateStr && app.endTime <= currentTimeStr;
@@ -711,14 +727,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (toComplete.length > 0) {
-        const completedIds = new Set(toComplete.map((a) => a.id));
-        setAppointments((prev) =>
-          prev.map((a) =>
-            completedIds.has(a.id)
-              ? { ...a, status: 'Concluído' as AppointmentStatus, updatedAt: new Date().toISOString() }
-              : a
-          )
-        );
+        // Mark in memory immediately to prevent concurrent duplicate checks
+        toComplete.forEach((a) => autoCompletedIds.current.add(a.id));
 
         for (const app of toComplete) {
           try {
@@ -726,21 +736,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               status: 'Concluído',
               updatedAt: new Date().toISOString(),
             });
-            addNotification(
-              'agendamento',
-              'Serviço Concluído Automaticamente',
-              `O atendimento de ${app.customerName} (${app.services.map((s) => s.name).join(', ')}) com ${app.barberName} atingiu o horário previsto (${app.endTime}) e foi concluído com sucesso.`
-            );
           } catch (err) {
-            console.warn('Auto-complete update error:', err);
+            console.warn('Auto-complete update notice:', err);
           }
         }
       }
     };
 
-    checkAndAutoComplete();
-    const interval = setInterval(checkAndAutoComplete, 15000);
-    return () => clearInterval(interval);
+    const timer = setTimeout(checkAndAutoComplete, 1000);
+    const interval = setInterval(checkAndAutoComplete, 30000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [appointments]);
 
   // Determine which completed appointment requires review from the active client
@@ -1991,9 +1999,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return false;
       }
 
-      // Max 4.5MB to ensure safe storage in localStorage
-      if (file.size > 4.5 * 1024 * 1024) {
-        addToast('O arquivo de áudio deve ter no máximo 4.5MB.', 'error');
+      // Max 1.8MB to ensure safe storage without memory crashes in mobile browsers
+      if (file.size > 1.8 * 1024 * 1024) {
+        addToast('O arquivo de áudio deve ter no máximo 1.8MB para não sobrecarregar o aparelho.', 'error');
         return false;
       }
 
@@ -2041,7 +2049,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem(LOCAL_STORAGE_CUSTOM_SOUND_NAME_KEY);
       localStorage.setItem(LOCAL_STORAGE_SOUND_TYPE_KEY, 'bell');
     } catch {}
-    playAudioEffect(soundVolume, false, 'bell', null);
+    playAudioEffect(soundVolume, false, 'bell', null, true);
     addToast('Som de notificação restaurado para o padrão (Sino Dourado).', 'success');
   };
 
@@ -2050,7 +2058,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const testNotificationSound = () => {
-    playAudioEffect(soundVolume > 0 ? soundVolume : 80, false, soundType, customSoundData);
+    playAudioEffect(soundVolume > 0 ? soundVolume : 80, false, soundType, customSoundData, true);
     addToast('Tocando som de notificação...', 'info');
   };
 
@@ -2130,6 +2138,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedBarberForBooking,
         setSelectedBarberForBooking,
         addAppointment,
+        updateAppointment,
         updateAppointmentStatus,
         cancelAppointment,
         rescheduleAppointment,
