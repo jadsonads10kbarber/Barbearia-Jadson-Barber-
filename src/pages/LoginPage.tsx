@@ -166,7 +166,7 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     const idf = resetIdentifier.trim() || loginEmailOrPhone.trim();
     if (!idf) {
-      addToast('Por favor, informe seu e-mail ou WhatsApp.', 'error');
+      addToast('Por favor, informe seu número de WhatsApp.', 'error');
       return;
     }
 
@@ -188,11 +188,11 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     const idf = resetIdentifier.trim() || loginEmailOrPhone.trim();
     if (!idf) {
-      addToast('Por favor, informe seu e-mail ou WhatsApp.', 'error');
+      addToast('Por favor, informe seu número de WhatsApp.', 'error');
       return;
     }
     if (!resetTempCode.trim() || resetTempCode.trim().length < 4) {
-      addToast('Informe a senha temporária de 6 dígitos recebida no WhatsApp.', 'error');
+      addToast('Informe o código de 6 dígitos recebido no WhatsApp.', 'error');
       return;
     }
     if (!resetNewPassword || resetNewPassword.length < 4) {
@@ -497,19 +497,19 @@ export const LoginPage: React.FC = () => {
                 !resetRequestedSuccess ? (
                   <form onSubmit={handleForgotRequestSubmit} className="space-y-4">
                     <p className="text-xs text-neutral-300 leading-relaxed">
-                      Informe seu WhatsApp ou E-mail cadastrado. A barbearia gerará um <strong>código de 6 dígitos</strong> e enviará no seu WhatsApp.
+                      Informe seu <strong>número de WhatsApp cadastrado</strong>. A equipe da barbearia gerará um <strong>código de 6 dígitos</strong> e enviará diretamente para você via WhatsApp.
                     </p>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
                         <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
-                        WhatsApp ou E-mail
+                        Seu WhatsApp
                       </label>
                       <input
                         type="text"
                         value={resetIdentifier}
                         onChange={(e) => setResetIdentifier(e.target.value)}
-                        placeholder="Ex: (11) 99999-8888 ou seu@email.com"
+                        placeholder="Ex: (11) 99999-8888"
                         className="w-full bg-black/70 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
                         required
                       />
@@ -547,7 +547,7 @@ export const LoginPage: React.FC = () => {
                     <div className="space-y-1">
                       <h4 className="text-sm font-bold text-white font-mono">Solicitação Enviada!</h4>
                       <p className="text-xs text-neutral-300 leading-relaxed">
-                        A equipe da Barbearia Jadson Barber já foi notificada e enviará seu código de 6 dígitos no WhatsApp.
+                        A equipe da Barbearia Jadson Barber já foi notificada e enviará seu código de 6 dígitos diretamente no seu WhatsApp.
                       </p>
                     </div>
 
@@ -566,13 +566,13 @@ export const LoginPage: React.FC = () => {
                   <div className="space-y-1">
                     <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
                       <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
-                      Seu WhatsApp ou E-mail
+                      Seu WhatsApp
                     </label>
                     <input
                       type="text"
                       value={resetIdentifier}
                       onChange={(e) => setResetIdentifier(e.target.value)}
-                      placeholder="Ex: (11) 99999-8888 ou seu@email.com"
+                      placeholder="Ex: (11) 99999-8888"
                       className="w-full bg-black/70 border border-neutral-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-[#DAA520]"
                       required
                     />

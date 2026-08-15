@@ -995,7 +995,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const appUrl = window.location.origin;
-    const message = `Olá, *${targetName}*! ✂️💈\n\nAqui é da *Barbearia Jadson Barber*.\n\nSua solicitação de redefinição de acesso foi aprovada. Sua senha temporária de 6 dígitos é:\n\n🔑 *${tempCode}*\n\n👉 Para cadastrar sua nova senha definitiva:\n1. Acesse o aplicativo: ${appUrl}\n2. Digite seu e-mail ou WhatsApp\n3. Insira o código temporário *${tempCode}*\n4. Crie sua nova senha e confirme!\n\n_Qualquer dúvida, estamos à disposição!_`;
+    const message = `Olá, *${targetName}*! ✂️💈\n\nAqui é da *Barbearia Jadson Barber*.\n\nSeu código de 6 dígitos para redefinição de acesso é:\n\n🔑 *${tempCode}*\n\n👉 Para cadastrar sua nova senha:\n1. Acesse o aplicativo: ${appUrl}\n2. Clique no botão "Esqueci minha senha"\n3. Informe seu WhatsApp e o código temporário *${tempCode}*\n4. Crie sua nova senha!\n\n_Qualquer dúvida, estamos à disposição no WhatsApp!_`;
 
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(message)}`;
 

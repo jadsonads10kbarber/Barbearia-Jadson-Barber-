@@ -441,7 +441,7 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
                                           const cleanDigits = targetPhone.replace(/\D/g, '');
                                           let fullPhone = cleanDigits.length === 10 || cleanDigits.length === 11 ? `55${cleanDigits}` : cleanDigits;
                                           const appUrl = window.location.origin;
-                                          const msg = `Olá, *${targetName}*! ✂️💈\n\nAqui é da *Barbearia Jadson Barber*.\n\nSua senha temporária de 6 dígitos para redefinir seu acesso é:\n\n🔑 *${tempCode}*\n\n👉 Acesse o aplicativo (${appUrl}), informe seu WhatsApp/E-mail, digite este código temporário e defina sua nova senha.`;
+                                          const msg = `Olá, *${targetName}*! ✂️💈\n\nAqui é da *Barbearia Jadson Barber*.\n\nSeu código de 6 dígitos para redefinir seu acesso é:\n\n🔑 *${tempCode}*\n\n👉 Acesse o aplicativo (${appUrl}), clique em "Esqueci minha senha", informe seu WhatsApp e digite este código temporário para definir sua nova senha.`;
                                           window.open(`https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(msg)}`, '_blank');
                                         }}
                                         className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-[11px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
