@@ -333,44 +333,49 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
                       <div
                         key={notif.id}
                         onClick={() => handleNotificationClick(notif)}
-                        className={`group relative p-3 rounded-xl border transition-all cursor-pointer ${
+                        className={`group relative p-3.5 rounded-xl border transition-all cursor-pointer ${
                           isUnread
-                            ? 'bg-amber-950/20 border-amber-500/40 hover:bg-amber-950/30'
-                            : 'bg-neutral-900/50 border-neutral-800/60 hover:bg-neutral-800/40 text-neutral-400'
+                            ? 'bg-amber-950/25 border-amber-500/40 hover:bg-amber-950/35 shadow-sm'
+                            : 'bg-neutral-900/40 border-neutral-800/70 hover:bg-neutral-800/40 text-neutral-400'
                         }`}
                       >
                         <div className="flex items-start gap-3">
                           {/* Type Icon */}
-                          <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${iconColor}`}>
+                          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-sm ${iconColor}`}>
                             <IconComponent className="w-4 h-4" />
                           </div>
 
                           {/* Content */}
-                          <div className="flex-1 min-w-0 pr-6">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span
-                                className={`text-xs font-mono font-bold ${
-                                  isUnread ? 'text-white font-black' : 'text-neutral-300'
-                                }`}
-                              >
-                                {notif.title}
-                              </span>
-                              {isUnread && (
-                                <span className="w-2 h-2 rounded-full bg-[#DAA520] shrink-0 animate-pulse" />
-                              )}
+                          <div className="flex-1 min-w-0 pr-6 text-left">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span
+                                  className={`text-xs font-mono tracking-tight truncate ${
+                                    isUnread ? 'text-white font-black' : 'text-neutral-300 font-bold'
+                                  }`}
+                                >
+                                  {notif.title}
+                                </span>
+                                {isUnread && (
+                                  <span className="inline-block w-2 h-2 rounded-full bg-[#DAA520] shrink-0 animate-pulse" />
+                                )}
+                              </div>
                             </div>
+
                             <p
-                              className={`text-xs mt-0.5 leading-relaxed ${
+                              className={`text-xs mt-1 leading-relaxed text-left break-words ${
                                 isUnread ? 'text-neutral-200' : 'text-neutral-400'
                               }`}
                             >
                               {notif.message}
                             </p>
-                            <div className="flex items-center gap-2 mt-2 text-[10px] text-neutral-500 font-mono">
-                              <span>{notif.date}</span>
+
+                            <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-neutral-800/50 text-[10px] text-neutral-500 font-mono">
+                              <span className="shrink-0">{notif.date}</span>
                               {notif.type === 'agendamento' && (
-                                <span className="text-[#DAA520] font-bold flex items-center gap-0.5">
-                                  Ver agendamentos <ExternalLink className="w-2.5 h-2.5" />
+                                <span className="text-[#DAA520] font-bold flex items-center gap-1 hover:underline">
+                                  <span>Ver na Agenda</span>
+                                  <ExternalLink className="w-3 h-3" />
                                 </span>
                               )}
                             </div>
@@ -382,7 +387,7 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
                               e.stopPropagation();
                               deleteNotification(notif.id);
                             }}
-                            className="absolute top-3 right-3 p-1 rounded-md text-neutral-500 hover:text-red-400 hover:bg-neutral-800 transition-colors opacity-60 group-hover:opacity-100"
+                            className="absolute top-2.5 right-2.5 p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-neutral-800 transition-colors opacity-70 group-hover:opacity-100 cursor-pointer"
                             title="Remover notificação"
                           >
                             <X className="w-3.5 h-3.5" />

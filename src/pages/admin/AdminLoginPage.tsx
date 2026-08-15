@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Scissors, ShieldCheck, Lock, Mail, ArrowLeft, KeyRound, Sparkles } from 'lucide-react';
+import { Scissors, ShieldCheck, Lock, Mail, ArrowLeft, KeyRound } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const AdminLoginPage: React.FC = () => {
   const { loginAdmin, setActivePage, addToast } = useApp();
 
-  const [email, setEmail] = useState('barbeariajadsonbarber@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -25,12 +25,6 @@ export const AdminLoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleFillDemo = () => {
-    setEmail('barbeariajadsonbarber@gmail.com');
-    setPassword('Barbearia25*');
-    addToast('Credenciais mestre preenchidas.', 'info');
   };
 
   return (
@@ -112,20 +106,8 @@ export const AdminLoginPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Fill Credentials Quick Button */}
-        <div className="pt-2 border-t border-neutral-800/80">
-          <button
-            type="button"
-            onClick={handleFillDemo}
-            className="w-full py-2.5 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Preencher Credenciais Mestre</span>
-          </button>
-        </div>
-
         {/* Security Footer Note */}
-        <div className="text-center text-[10px] text-neutral-500 font-mono uppercase tracking-wider">
+        <div className="text-center text-[10px] text-neutral-500 font-mono uppercase tracking-wider pt-1">
           <p>Sincronizado com Firebase • Acesso restrito</p>
         </div>
 

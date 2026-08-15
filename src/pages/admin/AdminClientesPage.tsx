@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { ContactRound, Search, Calendar, Phone, Mail, DollarSign, History, X, ChevronRight } from 'lucide-react';
+import { ContactRound, Search, Calendar, Phone, Mail, DollarSign, History, X, ChevronRight, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { Customer, Appointment } from '../../types';
 
 export const AdminClientesPage: React.FC = () => {
-  const { customers, appointments } = useApp();
+  const { customers, appointments, deleteCustomer, addToast } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  const handleDeleteCustomer = async (c: Customer, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (window.confirm(`Deseja realmente remover o cliente "${c.name}" da base de dados?`)) {
+      await deleteCustomer(c.id);
+      if (selectedCustomer?.id === c.id) {
+        setSelectedCustomer(null);
+      }
+    }
+  };
 
   const filteredCustomers = customers.filter((c) => {
     if (!searchQuery.trim()) return true;
@@ -103,13 +113,22 @@ export const AdminClientesPage: React.FC = () => {
                         R$ {c.totalSpent.toFixed(2)}
                       </td>
                       <td className="p-4 text-right">
-                        <button
-                          onClick={() => setSelectedCustomer(c)}
-                          className="py-1.5 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-amber-400 font-bold text-[11px] uppercase transition-colors inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>Histórico</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSelectedCustomer(c)}
+                            className="py-1.5 px-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-amber-400 font-bold text-[11px] uppercase transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Histórico</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteCustomer(c, e)}
+                            className="p-1.5 rounded-xl bg-neutral-900 hover:bg-red-950/60 border border-neutral-800 hover:border-red-800/60 text-neutral-500 hover:text-red-400 transition-colors cursor-pointer"
+                            title="Excluir cliente"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

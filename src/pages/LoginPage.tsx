@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { LogIn, UserPlus, Phone, Mail, Lock, User, Scissors, KeyRound, Sparkles } from 'lucide-react';
+import { LogIn, UserPlus, Phone, Mail, Lock, User, Scissors, KeyRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const LoginPage: React.FC = () => {
@@ -89,16 +89,6 @@ export const LoginPage: React.FC = () => {
       setActivePage('agenda');
     } catch (err) {
       addToast('Falha ao criar conta. Tente novamente.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleQuickDemoLogin = async () => {
-    setIsLoading(true);
-    try {
-      await login('cliente.vip@jadsonbarber.com.br', '123456');
-      setActivePage('agenda');
     } finally {
       setIsLoading(false);
     }
@@ -295,23 +285,6 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
         )}
-
-        {/* Divider */}
-        <div className="relative flex py-1 items-center">
-          <div className="flex-grow border-t border-white/10"></div>
-          <span className="flex-shrink mx-3 text-[10px] uppercase font-mono text-gray-500">ou acesso rápido</span>
-          <div className="flex-grow border-t border-white/10"></div>
-        </div>
-
-        {/* Quick Demo Login */}
-        <button
-          type="button"
-          onClick={handleQuickDemoLogin}
-          className="w-full py-3 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>Entrar como Cliente VIP (Teste)</span>
-        </button>
 
       </div>
 

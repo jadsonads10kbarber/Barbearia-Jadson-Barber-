@@ -173,6 +173,7 @@ interface AppContextType {
 
   // Customer actions
   updateCustomer: (id: string, data: Partial<Customer>) => Promise<boolean>;
+  deleteCustomer: (id: string) => Promise<boolean>;
 
   // Insumo / Stock actions
   addInsumo: (item: Omit<InsumoItem, 'id'>) => Promise<boolean>;
@@ -1505,6 +1506,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
+  const deleteCustomer = async (id: string): Promise<boolean> => {
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await deleteDoc(doc(db, 'customers', id));
+    } catch (e) {
+      console.warn('Customer deleted locally', e);
+    }
+    addAdminLog('Exclusão de Cliente', `Registro de cliente ${id} removido.`);
+    addToast('Cliente removido com sucesso.', 'success');
+    return true;
+  };
+
   // INSUMOS CRUD
   const addInsumo = async (itemData: Omit<InsumoItem, 'id'>): Promise<boolean> => {
     const newId = `ins-${Date.now()}`;
@@ -2054,6 +2067,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const playNotificationSound = (type?: NotificationSoundType) => {
+    const isInAdmin = Boolean(adminUser && adminUser.role === 'admin') || activePage.startsWith('admin-');
+    if (!isInAdmin) return;
     playAudioEffect(soundVolume, isSoundMuted, type || soundType, customSoundData);
   };
 
@@ -2062,12 +2077,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Tocando som de notificação...', 'info');
   };
 
-  // Keep playSoundRef in sync
+  // Keep playSoundRef in sync - CLIENTS WILL NEVER HEAR ADMIN NOTIFICATIONS
   useEffect(() => {
     playSoundRef.current = (type?: NotificationSoundType) => {
+      const isInAdmin = Boolean(adminUser && adminUser.role === 'admin') || activePage.startsWith('admin-');
+      if (!isInAdmin) {
+        return; // Client in public view: strictly silent
+      }
       playAudioEffect(soundVolume, isSoundMuted, type || soundType, customSoundData);
     };
-  }, [soundVolume, isSoundMuted, soundType, customSoundData]);
+  }, [soundVolume, isSoundMuted, soundType, customSoundData, adminUser, activePage]);
+
+  // Alert with sound when opening admin panel if there are unread notifications
+  const hasAlertedPanelOpen = useRef(false);
+  useEffect(() => {
+    if (activePage.startsWith('admin-')) {
+      if (!hasAlertedPanelOpen.current) {
+        hasAlertedPanelOpen.current = true;
+        const unreadCount = notifications.filter((n) => !n.read).length;
+        if (unreadCount > 0 && !isSoundMuted && soundVolume > 0) {
+          const timer = setTimeout(() => {
+            playAudioEffect(soundVolume, isSoundMuted, soundType, customSoundData);
+          }, 350);
+          return () => clearTimeout(timer);
+        }
+      }
+    } else {
+      hasAlertedPanelOpen.current = false;
+    }
+  }, [activePage, notifications, isSoundMuted, soundVolume, soundType, customSoundData]);
 
   const markNotificationRead = (id: string) => {
     setNotifications((prev) =>
@@ -2156,6 +2194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateFeedPost,
         deleteFeedPost,
         updateCustomer,
+        deleteCustomer,
         addInsumo,
         updateInsumo,
         deleteInsumo,
