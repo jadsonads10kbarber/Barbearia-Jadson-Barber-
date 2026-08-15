@@ -1,12 +1,46 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, initializeFirestore, Firestore, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Silence internal retry/polling notices from the SDK
+try {
+  setLogLevel('silent');
+} catch (e) {}
 
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+let app: FirebaseApp;
+try {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+} catch (e) {
+  app = getApp();
+}
+
+let dbInstance: Firestore;
+try {
+  dbInstance = initializeFirestore(
+    app,
+    {
+      experimentalAutoDetectLongPolling: true,
+    },
+    firebaseConfig.firestoreDatabaseId
+  );
+} catch (e) {
+  try {
+    dbInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  } catch (err2) {
+    dbInstance = getFirestore(app);
+  }
+}
+
+let authInstance: Auth;
+try {
+  authInstance = getAuth(app);
+} catch (e) {
+  authInstance = getAuth();
+}
+
+export const db = dbInstance;
+export const auth = authInstance;
 
 export enum OperationType {
   CREATE = 'create',
@@ -46,21 +80,3 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
   return errInfo;
 }
-
-export async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    if (
-      msg.includes('offline') ||
-      msg.includes('unavailable') ||
-      msg.includes('Could not reach') ||
-      (error as { code?: string })?.code === 'unavailable'
-    ) {
-      console.warn('Firebase client offline or unavailable status:', msg);
-    }
-  }
-}
-
-testConnection();

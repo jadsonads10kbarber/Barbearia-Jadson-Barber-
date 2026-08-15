@@ -367,7 +367,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return initialBarbers;
   });
   const [services, setServices] = useState<ServiceItem[]>(initialServices);
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>(initialFeedPosts);
+  const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => {
+    try {
+      const saved = localStorage.getItem('jadson_feed_posts_cache');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return initialFeedPosts;
+  });
   const [appointments, setAppointments] = useState<Appointment[]>(sampleAppointments);
   const [deletedAppointments, setDeletedAppointments] = useState<DeletedAppointmentRecord[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
@@ -453,6 +462,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return '(11) 99999-8888';
   });
+
+  const getClientLikeId = (): string => {
+    if (currentUser?.id) return `user_${currentUser.id}`;
+    if (currentUser?.phone) {
+      const clean = currentUser.phone.replace(/\D/g, '');
+      if (clean) return `phone_${clean}`;
+    }
+    if (customerPhone) {
+      const clean = customerPhone.replace(/\D/g, '');
+      if (clean.length >= 8) return `phone_${clean}`;
+    }
+    try {
+      let localId = localStorage.getItem('jadson_client_device_id');
+      if (!localId) {
+        localId = `device_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem('jadson_client_device_id', localId);
+      }
+      return localId;
+    } catch {
+      return 'device_client_default';
+    }
+  };
 
   // Notifications & Sound State
   const [isSoundMuted, setIsSoundMutedState] = useState<boolean>(() => {
@@ -598,8 +629,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'feed'),
         (snapshot) => {
           const list: FeedPost[] = [];
-          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as FeedPost));
-          setFeedPosts(list);
+          const clientLikeId = getClientLikeId();
+          snapshot.forEach((d) => {
+            const data = d.data() as Partial<FeedPost>;
+            const likedBy = Array.isArray(data.likedBy) ? data.likedBy : [];
+            const isLiked = likedBy.includes(clientLikeId);
+            list.push({
+              id: d.id,
+              title: data.title || '',
+              category: data.category || 'Tendências',
+              content: data.content || '',
+              image: data.image || '',
+              date: data.date || 'Hoje',
+              likesCount: typeof data.likesCount === 'number' ? data.likesCount : (likedBy.length || 0),
+              author: data.author || 'Barbearia Jadson Barber',
+              active: data.active ?? true,
+              highlighted: data.highlighted ?? false,
+              isLiked,
+              likedBy,
+            } as FeedPost);
+          });
+          if (list.length > 0) {
+            setFeedPosts(list);
+            try {
+              localStorage.setItem('jadson_feed_posts_cache', JSON.stringify(list));
+            } catch (e) {}
+          } else {
+            const saved = localStorage.getItem('jadson_feed_posts_cache');
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setFeedPosts(parsed);
+                  return;
+                }
+              } catch (e) {}
+            }
+          }
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'feed')
       );
@@ -1943,22 +2009,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // FEED ACTIONS
-  const toggleLikePost = (postId: string) => {
+  const toggleLikePost = async (postId: string) => {
+    const clientLikeId = getClientLikeId();
+    const targetPost = feedPosts.find((p) => p.id === postId);
+    if (!targetPost) return;
+
+    const likedByList = Array.isArray(targetPost.likedBy) ? targetPost.likedBy : [];
+    const alreadyLiked = likedByList.includes(clientLikeId) || Boolean(targetPost.isLiked);
+
+    if (alreadyLiked) {
+      // Toggle off / remove like
+      const updatedLikedBy = likedByList.filter((id) => id !== clientLikeId);
+      const newLikesCount = Math.max(0, (targetPost.likesCount || 1) - 1);
+
+      setFeedPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? { ...post, isLiked: false, likesCount: newLikesCount, likedBy: updatedLikedBy }
+            : post
+        )
+      );
+
+      try {
+        await updateDoc(doc(db, 'feed', postId), {
+          likesCount: newLikesCount,
+          likedBy: updatedLikedBy,
+        });
+      } catch (e) {
+        console.warn('Feed like updated locally', e);
+      }
+
+      addToast('Você descurtiu a publicação.', 'info');
+      return;
+    }
+
+    // User has not liked yet: Add 1 like
+    const updatedLikedBy = [...likedByList, clientLikeId];
+    const newLikesCount = (targetPost.likesCount || 0) + 1;
+
     setFeedPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          const isLiked = !post.isLiked;
-          const newLikes = isLiked ? post.likesCount + 1 : post.likesCount - 1;
-          updateDoc(doc(db, 'feed', postId), { likesCount: newLikes }).catch(() => {});
-          return {
-            ...post,
-            isLiked,
-            likesCount: newLikes,
-          };
-        }
-        return post;
-      })
+      prev.map((post) =>
+        post.id === postId
+          ? { ...post, isLiked: true, likesCount: newLikesCount, likedBy: updatedLikedBy }
+          : post
+      )
     );
+
+    try {
+      await updateDoc(doc(db, 'feed', postId), {
+        likesCount: newLikesCount,
+        likedBy: updatedLikedBy,
+      });
+    } catch (e) {
+      console.warn('Feed like updated locally', e);
+    }
+
+    addToast('Publicação curtida! ❤️', 'success');
   };
 
   const addFeedPost = async (postData: Omit<FeedPost, 'id' | 'date' | 'likesCount'>): Promise<boolean> => {
@@ -1968,13 +2074,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: newId,
       date: 'Hoje',
       likesCount: 0,
+      likedBy: [],
       active: postData.active ?? true,
       highlighted: postData.highlighted ?? false,
     };
-    setFeedPosts((prev) => [newPost, ...prev]);
+    setFeedPosts((prev) => {
+      const updated = [newPost, ...prev];
+      try {
+        localStorage.setItem('jadson_feed_posts_cache', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     try {
-      await setDoc(doc(db, 'feed', newId), newPost);
+      const cleanPayload = cleanFirestoreData(newPost);
+      await setDoc(doc(db, 'feed', newId), cleanPayload);
       addAdminLog('Nova Publicação Feed', `Publicação "${newPost.title}" criada.`);
     } catch (e) {
       console.warn('Post saved locally', e);
@@ -1985,10 +2099,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateFeedPost = async (id: string, data: Partial<FeedPost>): Promise<boolean> => {
-    setFeedPosts((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+    setFeedPosts((prev) => {
+      const updated = prev.map((p) => (p.id === id ? { ...p, ...data } : p));
+      try {
+        localStorage.setItem('jadson_feed_posts_cache', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     try {
-      await updateDoc(doc(db, 'feed', id), data);
+      const cleanPayload = cleanFirestoreData(data);
+      await updateDoc(doc(db, 'feed', id), cleanPayload);
       addAdminLog('Editar Feed', `Publicação ID ${id} atualizada.`);
     } catch (e) {
       console.warn('Post updated locally', e);
@@ -1999,7 +2120,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteFeedPost = async (id: string): Promise<boolean> => {
-    setFeedPosts((prev) => prev.filter((p) => p.id !== id));
+    setFeedPosts((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      try {
+        localStorage.setItem('jadson_feed_posts_cache', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     try {
       await deleteDoc(doc(db, 'feed', id));
       addAdminLog('Excluir Feed', `Publicação ID ${id} excluída.`);

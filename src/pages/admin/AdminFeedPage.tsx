@@ -1,8 +1,59 @@
-import React, { useState } from 'react';
-import { Newspaper, Plus, Trash2, Edit2, Eye, EyeOff, Star, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  Newspaper,
+  Plus,
+  Trash2,
+  Edit2,
+  Star,
+  X,
+  UploadCloud,
+  Image as ImageIcon,
+  RefreshCw,
+  CheckCircle2,
+  Link as LinkIcon,
+  Sparkles,
+  Camera,
+  FolderOpen,
+  Eye,
+  Check
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { FeedPost } from '../../types';
+
+// Curated Barber Presets for instant selection if preferred
+const BARBER_PHOTO_PRESETS = [
+  {
+    title: 'Degradê Navalhado & Fade',
+    url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=800&auto=format&fit=crop&q=80',
+    category: 'Tendências',
+  },
+  {
+    title: 'Barba Alinhada & Terapia',
+    url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&auto=format&fit=crop&q=80',
+    category: 'Cuidados',
+  },
+  {
+    title: 'Corte Clássico Pompadour',
+    url: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800&auto=format&fit=crop&q=80',
+    category: 'Estilo',
+  },
+  {
+    title: 'Texturizado Moderno / Crop',
+    url: 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?w=800&auto=format&fit=crop&q=80',
+    category: 'Tendências',
+  },
+  {
+    title: 'Black Power & Linhas Perfeitas',
+    url: 'https://images.unsplash.com/photo-1520338661084-680395057c93?w=800&auto=format&fit=crop&q=80',
+    category: 'Cortes',
+  },
+  {
+    title: 'Ambiente & Experiência VIP',
+    url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&auto=format&fit=crop&q=80',
+    category: 'Aviso',
+  },
+];
 
 export const AdminFeedPage: React.FC = () => {
   const { feedPosts, addFeedPost, updateFeedPost, deleteFeedPost, addToast } = useApp();
@@ -14,16 +65,27 @@ export const AdminFeedPage: React.FC = () => {
   const [category, setCategory] = useState('Tendências');
   const [content, setContent] = useState('');
   const [image, setImage] = useState('');
+  const [imageFileName, setImageFileName] = useState('');
+  const [imageTab, setImageTab] = useState<'upload' | 'camera' | 'url' | 'presets'>('upload');
+  const [urlInput, setUrlInput] = useState('');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [author, setAuthor] = useState('Barbearia Jadson Barber');
   const [active, setActive] = useState(true);
   const [highlighted, setHighlighted] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenCreate = () => {
     setEditingPost(null);
     setTitle('');
     setCategory('Tendências');
     setContent('');
-    setImage('https://images.unsplash.com/photo-1517832606299-7ae9b720a186?w=600&auto=format&fit=crop&q=80');
+    setImage('');
+    setImageFileName('');
+    setUrlInput('');
+    setImageTab('upload');
     setAuthor('Barbearia Jadson Barber');
     setActive(true);
     setHighlighted(false);
@@ -35,11 +97,129 @@ export const AdminFeedPage: React.FC = () => {
     setTitle(post.title);
     setCategory(post.category);
     setContent(post.content);
-    setImage(post.image);
+    setImage(post.image || '');
+    setImageFileName('');
+    setUrlInput(post.image || '');
+    setImageTab(post.image?.startsWith('data:') ? 'upload' : 'url');
     setAuthor(post.author);
     setActive(post.active ?? true);
     setHighlighted(post.highlighted ?? false);
     setIsModalOpen(true);
+  };
+
+  // Ultra-reliable image compressor and loader for device/gallery/camera
+  const handleImageFile = (file: File) => {
+    if (!file) return;
+
+    // Check if it's an image file or has image extension
+    if (file.type && !file.type.startsWith('image/')) {
+      addToast('Por favor selecione um arquivo de imagem válido (JPG, PNG, WEBP).', 'error');
+      return;
+    }
+
+    setIsProcessingImage(true);
+    const fileName = file.name || 'foto_dispositivo.jpg';
+    setImageFileName(fileName);
+
+    // 1. Direct FileReader - sets immediate preview within milliseconds
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const rawDataUrl = e.target?.result as string;
+      if (rawDataUrl) {
+        // Set preview immediately so the user sees the photo right away!
+        setImage(rawDataUrl);
+
+        // 2. High-performance canvas downscaling (max 800px, 82% JPEG) to keep data light (~40KB) & fast in Firestore
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 800;
+            let w = img.naturalWidth || img.width || 800;
+            let h = img.naturalHeight || img.height || 600;
+
+            if (w > h) {
+              if (w > MAX_SIZE) {
+                h = Math.round((h * MAX_SIZE) / w);
+                w = MAX_SIZE;
+              }
+            } else {
+              if (h > MAX_SIZE) {
+                w = Math.round((w * MAX_SIZE) / h);
+                h = MAX_SIZE;
+              }
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, w, h);
+              const compressed = canvas.toDataURL('image/jpeg', 0.82);
+              setImage(compressed);
+              addToast(`Foto "${fileName}" carregada com sucesso!`, 'success');
+            }
+          } catch (canvasErr) {
+            console.warn('Canvas optimization fallback to reader', canvasErr);
+            addToast(`Foto "${fileName}" carregada com sucesso!`, 'success');
+          } finally {
+            setIsProcessingImage(false);
+          }
+        };
+
+        img.onerror = () => {
+          console.warn('Image decode error fallback, keeping raw data');
+          setIsProcessingImage(false);
+          addToast(`Foto "${fileName}" carregada!`, 'success');
+        };
+
+        img.src = rawDataUrl;
+      } else {
+        setIsProcessingImage(false);
+        addToast('Erro ao carregar os dados da foto.', 'error');
+      }
+    };
+
+    reader.onerror = () => {
+      setIsProcessingImage(false);
+      addToast('Não foi possível ler o arquivo selecionado.', 'error');
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageFile(file);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleImageFile(file);
+    }
+  };
+
+  const handleApplyUrl = () => {
+    if (!urlInput.trim()) {
+      addToast('Por favor, digite ou cole o link da imagem.', 'error');
+      return;
+    }
+    setImage(urlInput.trim());
+    setImageFileName('Imagem via link URL');
+    addToast('Link da imagem aplicado!', 'success');
+  };
+
+  const handleSelectPreset = (presetUrl: string, presetCat: string) => {
+    setImage(presetUrl);
+    setImageFileName('Modelo sugerido Jadson Barber');
+    if (!title) setCategory(presetCat);
+    addToast('Foto modelo selecionada!', 'success');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,36 +229,49 @@ export const AdminFeedPage: React.FC = () => {
       return;
     }
 
-    if (editingPost) {
-      await updateFeedPost(editingPost.id, {
-        title: title.trim(),
-        category,
-        content: content.trim(),
-        image: image.trim() || 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?w=600&auto=format&fit=crop&q=80',
-        author: author.trim(),
-        active,
-        highlighted,
-      });
-    } else {
-      await addFeedPost({
-        title: title.trim(),
-        category,
-        content: content.trim(),
-        image: image.trim() || 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?w=600&auto=format&fit=crop&q=80',
-        author: author.trim(),
-        active,
-        highlighted,
-      });
+    if (!image) {
+      addToast('Por favor, adicione uma foto para a publicação.', 'error');
+      return;
     }
 
-    setIsModalOpen(false);
+    setIsSubmitting(true);
+    try {
+      if (editingPost) {
+        await updateFeedPost(editingPost.id, {
+          title: title.trim(),
+          category,
+          content: content.trim(),
+          image,
+          author: author.trim(),
+          active,
+          highlighted,
+        });
+      } else {
+        await addFeedPost({
+          title: title.trim(),
+          category,
+          content: content.trim(),
+          image,
+          author: author.trim(),
+          active,
+          highlighted,
+        });
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Erro ao salvar publicação:', err);
+      addToast('Erro ao salvar publicação. Tente novamente.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <AdminLayout
       title="Gestão do Feed de Notícias & Tendências"
-      subtitle="Publique dicas de corte, avisos e promoções que aparecem diretamente no aplicativo do cliente"
+      subtitle="Publique fotos carregadas do celular/computador, fotos de cortes ou novidades para os clientes"
     >
+      {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#111111] p-4 rounded-2xl border border-neutral-800">
         <div>
           <h2 className="text-sm font-mono font-bold text-white flex items-center gap-2">
@@ -86,7 +279,7 @@ export const AdminFeedPage: React.FC = () => {
             Publicações do Feed ({feedPosts.length})
           </h2>
           <p className="text-xs text-neutral-400 font-sans">
-            Mantenha seus clientes informados e engajados
+            Cada cliente pode curtir cada publicação 1 vez
           </p>
         </div>
 
@@ -104,17 +297,24 @@ export const AdminFeedPage: React.FC = () => {
         {feedPosts.map((post) => (
           <div
             key={post.id}
-            className="bg-[#111111] border border-neutral-800 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-neutral-700 transition-colors"
+            className="bg-[#111111] border border-neutral-800 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-neutral-700 transition-colors shadow-lg"
           >
             <div>
-              <div className="relative h-44 w-full bg-neutral-900 overflow-hidden">
-                <img src={post.image} alt={post.title} className="w-full h-full object-cover" />
+              <div className="relative h-48 w-full bg-neutral-900 overflow-hidden">
+                <img
+                  src={post.image || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&auto=format&fit=crop&q=80'}
+                  alt={post.title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&auto=format&fit=crop&q=80';
+                  }}
+                />
                 <div className="absolute top-2 left-2 flex gap-1">
-                  <span className="px-2.5 py-1 rounded-full bg-black/80 text-[#DAA520] text-[10px] font-mono font-bold uppercase border border-amber-500/30">
+                  <span className="px-2.5 py-1 rounded-full bg-black/80 text-[#DAA520] text-[10px] font-mono font-bold uppercase border border-amber-500/30 backdrop-blur-xs">
                     {post.category}
                   </span>
                   {post.highlighted && (
-                    <span className="px-2.5 py-1 rounded-full bg-amber-500 text-black text-[10px] font-mono font-bold uppercase flex items-center gap-1">
+                    <span className="px-2.5 py-1 rounded-full bg-amber-500 text-black text-[10px] font-mono font-bold uppercase flex items-center gap-1 shadow-md">
                       <Star className="w-3 h-3 fill-black" />
                       Destaque
                     </span>
@@ -130,6 +330,10 @@ export const AdminFeedPage: React.FC = () => {
 
                 <h3 className="font-bold text-sm text-white line-clamp-1">{post.title}</h3>
                 <p className="text-xs text-neutral-400 line-clamp-3 leading-relaxed">{post.content}</p>
+
+                <div className="pt-1 text-[11px] text-[#DAA520] font-mono font-semibold">
+                  ❤️ {post.likesCount || 0} curtida{(post.likesCount || 0) === 1 ? '' : 's'} (1 por cliente)
+                </div>
               </div>
             </div>
 
@@ -144,14 +348,18 @@ export const AdminFeedPage: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => handleOpenEdit(post)}
-                  className="p-1.5 rounded-lg bg-neutral-900 text-amber-400 hover:bg-neutral-800 border border-neutral-800"
+                  className="p-1.5 rounded-lg bg-neutral-900 text-amber-400 hover:bg-neutral-800 border border-neutral-800 cursor-pointer"
+                  title="Editar"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => deleteFeedPost(post.id)}
-                  className="p-1.5 rounded-lg bg-neutral-900 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 border border-neutral-800"
+                  className="p-1.5 rounded-lg bg-neutral-900 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 border border-neutral-800 cursor-pointer"
+                  title="Excluir"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -164,25 +372,275 @@ export const AdminFeedPage: React.FC = () => {
       {/* Post Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-[#111111] border border-neutral-800 rounded-3xl p-6 space-y-4 relative shadow-2xl">
+          <div className="w-full max-w-lg bg-[#111111] border border-neutral-800 rounded-3xl p-6 space-y-4 relative shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <h3 className="text-sm font-mono font-bold uppercase text-white flex items-center gap-2">
                 <Newspaper className="w-4 h-4 text-[#DAA520]" />
-                {editingPost ? 'Editar Publicação' : 'Criar Publicação'}
+                {editingPost ? 'Editar Publicação' : 'Criar Publicação no Feed'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900 cursor-pointer"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3.5">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              
+              {/* Image Selection Section */}
+              <div className="space-y-2">
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-[#DAA520]" />
+                    Foto da Publicação *
+                  </span>
+                  {image && (
+                    <span className="text-[10px] text-emerald-400 font-sans font-bold flex items-center gap-1 bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Foto Carregada
+                    </span>
+                  )}
+                </label>
+
+                {/* Sub tabs */}
+                <div className="grid grid-cols-4 gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[11px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('upload')}
+                    className={`py-1.5 px-1 rounded-lg font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                      imageTab === 'upload' ? 'bg-[#DAA520] text-black shadow' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <FolderOpen className="w-3 h-3" />
+                    <span>Galeria</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('camera')}
+                    className={`py-1.5 px-1 rounded-lg font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                      imageTab === 'camera' ? 'bg-[#DAA520] text-black shadow' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Camera className="w-3 h-3" />
+                    <span>Câmera</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('url')}
+                    className={`py-1.5 px-1 rounded-lg font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                      imageTab === 'url' ? 'bg-[#DAA520] text-black shadow' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <LinkIcon className="w-3 h-3" />
+                    <span>Link</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('presets')}
+                    className={`py-1.5 px-1 rounded-lg font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                      imageTab === 'presets' ? 'bg-[#DAA520] text-black shadow' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Modelos</span>
+                  </button>
+                </div>
+
+                {/* Tab 1: Galeria / Arquivos do Dispositivo */}
+                {imageTab === 'upload' && (
+                  <div className="space-y-3">
+                    <label
+                      htmlFor="admin-feed-file-input"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={handleDrop}
+                      className="border-2 border-dashed border-[#DAA520]/60 hover:border-[#DAA520] bg-amber-950/10 hover:bg-amber-950/20 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-3 group block"
+                    >
+                      <input
+                        id="admin-feed-file-input"
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        onClick={(e) => {
+                          (e.currentTarget as HTMLInputElement).value = '';
+                        }}
+                        className="sr-only"
+                      />
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#DAA520]/20 group-hover:bg-[#DAA520]/30 flex items-center justify-center text-[#DAA520] transition-colors border border-[#DAA520]/30 shadow-inner">
+                        {isProcessingImage ? (
+                          <RefreshCw className="w-7 h-7 animate-spin text-[#DAA520]" />
+                        ) : (
+                          <UploadCloud className="w-7 h-7" />
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-white font-mono flex items-center justify-center gap-1.5">
+                          {isProcessingImage ? (
+                            'Processando foto selecionada...'
+                          ) : (
+                            <>
+                              <span>Escolher Foto da Galeria</span>
+                              <span className="text-[#DAA520]">→</span>
+                            </>
+                          )}
+                        </p>
+                        <p className="text-xs text-neutral-400 font-sans">
+                          Toque aqui para abrir as fotos do celular ou computador
+                        </p>
+                      </div>
+
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 text-[#DAA520] text-xs font-mono font-bold border border-[#DAA520]/40 group-hover:bg-[#DAA520] group-hover:text-black transition-colors">
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>Abrir Galeria / Arquivos</span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Tab 2: Câmera Direta */}
+                {imageTab === 'camera' && (
+                  <div className="space-y-3">
+                    <label
+                      htmlFor="admin-feed-camera-input"
+                      className="border-2 border-dashed border-[#DAA520]/60 hover:border-[#DAA520] bg-amber-950/15 hover:bg-amber-950/25 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-3 group block"
+                    >
+                      <input
+                        id="admin-feed-camera-input"
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleFileChange}
+                        onClick={(e) => {
+                          (e.currentTarget as HTMLInputElement).value = '';
+                        }}
+                        className="sr-only"
+                      />
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#DAA520]/20 flex items-center justify-center text-[#DAA520] border border-[#DAA520]/30 shadow-inner">
+                        {isProcessingImage ? (
+                          <RefreshCw className="w-7 h-7 animate-spin text-[#DAA520]" />
+                        ) : (
+                          <Camera className="w-7 h-7" />
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-[#DAA520] font-mono">
+                          {isProcessingImage ? 'Processando foto capturada...' : 'Tirar Foto com a Câmera Agora'}
+                        </p>
+                        <p className="text-xs text-neutral-300 font-sans">
+                          Abre a câmera do celular para fotografar o corte na hora
+                        </p>
+                      </div>
+
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 text-[#DAA520] text-xs font-mono font-bold border border-[#DAA520]/40 group-hover:bg-[#DAA520] group-hover:text-black transition-colors">
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Abrir Câmera</span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Tab 3: URL Input */}
+                {imageTab === 'url' && (
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      placeholder="https://exemplo.com/foto-corte.jpg"
+                      className="flex-1 bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyUrl}
+                      className="px-3.5 py-2.5 bg-[#DAA520] hover:bg-[#c9951b] text-black text-xs font-mono font-bold rounded-xl cursor-pointer"
+                    >
+                      Carregar
+                    </button>
+                  </div>
+                )}
+
+                {/* Tab 4: Barber Presets */}
+                {imageTab === 'presets' && (
+                  <div className="grid grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1 bg-neutral-950 rounded-xl border border-neutral-800">
+                    {BARBER_PHOTO_PRESETS.map((preset, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => handleSelectPreset(preset.url, preset.category)}
+                        className={`relative rounded-lg overflow-hidden border transition-all text-left group cursor-pointer ${
+                          image === preset.url ? 'border-[#DAA520] ring-2 ring-[#DAA520]/40' : 'border-neutral-800 hover:border-neutral-600'
+                        }`}
+                      >
+                        <img src={preset.url} alt={preset.title} className="w-full h-16 object-cover group-hover:scale-105 transition-transform" />
+                        <div className="p-1 bg-black/90">
+                          <p className="text-[9px] font-mono text-neutral-300 truncate">{preset.title}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Active Image Preview Box */}
+                {image && (
+                  <div className="relative rounded-2xl overflow-hidden border border-emerald-500/40 bg-neutral-950 p-2.5 space-y-2 mt-2 shadow-lg">
+                    <div className="relative h-48 w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                      <img
+                        src={image}
+                        alt="Preview da Foto Carregada"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&auto=format&fit=crop&q=80';
+                        }}
+                      />
+                      <div className="absolute top-2 right-2 flex gap-1.5">
+                        <label
+                          htmlFor="admin-feed-file-input"
+                          className="px-2.5 py-1 rounded-lg bg-black/80 hover:bg-black text-[#DAA520] text-xs font-mono font-bold flex items-center gap-1 border border-amber-500/40 transition-colors shadow-lg cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Trocar</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImage('');
+                            setImageFileName('');
+                            setUrlInput('');
+                          }}
+                          className="p-1 rounded-lg bg-black/80 hover:bg-red-950 text-red-400 text-xs font-mono font-bold border border-red-500/30 transition-colors cursor-pointer"
+                          title="Remover Foto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="px-1 text-[11px] font-mono flex items-center justify-between">
+                      <span className="text-neutral-300 truncate max-w-[240px]">
+                        {imageFileName || 'Foto Pronta para Salvar'}
+                      </span>
+                      <span className="text-emerald-400 font-bold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" />
+                        Pronta para o Feed
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1">
-                <label className="text-xs font-mono font-bold uppercase text-neutral-300">Título</label>
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300">Título da Publicação</label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ex: Estilos de Barba para 2026"
+                  placeholder="Ex: Novo Estilo Degradê Navalhado 2026"
                   className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#DAA520]"
                   required
                 />
@@ -197,79 +655,78 @@ export const AdminFeedPage: React.FC = () => {
                     className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
                   >
                     <option value="Tendências">Tendências</option>
-                    <option value="Campanha">Campanha</option>
-                    <option value="Cuidados">Cuidados</option>
-                    <option value="Aviso">Aviso</option>
+                    <option value="Cortes">Cortes & Barba</option>
+                    <option value="Estilo">Estilo & Dicas</option>
+                    <option value="Campanha">Campanha / Promoção</option>
+                    <option value="Cuidados">Cuidados Capilares</option>
+                    <option value="Aviso">Aviso da Barbearia</option>
                   </select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Autor</label>
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Autor / Assinatura</label>
                   <input
                     type="text"
                     value={author}
                     onChange={(e) => setAuthor(e.target.value)}
-                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                    placeholder="Barbearia Jadson Barber"
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-mono font-bold uppercase text-neutral-300">URL da Imagem Banner</label>
-                <input
-                  type="url"
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-mono font-bold uppercase text-neutral-300">Conteúdo</label>
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300">Conteúdo da Publicação</label>
                 <textarea
                   rows={4}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Texto completo da matéria..."
-                  className="w-full bg-black/80 border border-neutral-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                  placeholder="Escreva a descrição, detalhes do corte, produtos usados ou aviso..."
+                  className="w-full bg-black/80 border border-neutral-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#DAA520] leading-relaxed"
                   required
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <label className="flex items-center gap-2 text-xs font-mono cursor-pointer">
+              <div className="flex items-center justify-between p-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs font-mono">
+                <label className="flex items-center gap-2 text-neutral-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={active}
                     onChange={(e) => setActive(e.target.checked)}
-                    className="accent-amber-500 rounded"
+                    className="rounded border-neutral-700 text-[#DAA520] focus:ring-[#DAA520] cursor-pointer"
                   />
-                  <span>Ativo no App</span>
+                  <span>Publicação Ativa</span>
                 </label>
 
-                <label className="flex items-center gap-2 text-xs font-mono cursor-pointer">
+                <label className="flex items-center gap-2 text-neutral-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={highlighted}
                     onChange={(e) => setHighlighted(e.target.checked)}
-                    className="accent-amber-500 rounded"
+                    className="rounded border-neutral-700 text-[#DAA520] focus:ring-[#DAA520] cursor-pointer"
                   />
-                  <span>Destaque Principal</span>
+                  <span className="text-[#DAA520] font-bold">Destaque ⭐</span>
                 </label>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                disabled={isSubmitting || isProcessingImage}
+                className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50 shadow-lg flex items-center justify-center gap-2"
               >
-                {editingPost ? 'Salvar Alterações' : 'Publicar no Feed'}
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Salvando Publicação...</span>
+                  </>
+                ) : (
+                  <span>{editingPost ? 'Salvar Alterações' : 'Publicar no Feed'}</span>
+                )}
               </button>
             </form>
           </div>
         </div>
       )}
-
     </AdminLayout>
   );
 };

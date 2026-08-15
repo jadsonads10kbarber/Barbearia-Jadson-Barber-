@@ -116,6 +116,7 @@ export interface FeedPost {
   isLiked?: boolean;
   active?: boolean;
   highlighted?: boolean;
+  likedBy?: string[];
 }
 
 export interface UserAccount {
