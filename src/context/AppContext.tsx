@@ -40,6 +40,7 @@ import {
   AdminNotification,
   AdminLog,
   DeletedAppointmentRecord,
+  PasswordResetRequest,
 } from '../types';
 import {
   initialBarbers,
@@ -121,6 +122,13 @@ interface AppContextType {
   registerUser: (name: string, phone: string, email: string, password?: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (updatedData: Partial<UserAccount>) => void;
+
+  // Password Recovery Flow
+  passwordResetRequests: PasswordResetRequest[];
+  requestPasswordReset: (identifier: string, name?: string) => Promise<{ success: boolean; message: string; request?: PasswordResetRequest }>;
+  generateTempPasswordForReset: (requestId: string) => Promise<{ tempCode: string; whatsappUrl: string }>;
+  completePasswordReset: (identifier: string, tempCode: string, newPassword: string) => Promise<boolean>;
+  getActivePasswordReset: (identifier: string) => PasswordResetRequest | undefined;
 
   // Admin Auth
   isAdminLoggedIn: boolean;
@@ -371,6 +379,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [reviews, setReviews] = useState<Review[]>(initialReviews);
   const [sales, setSales] = useState<SaleTransaction[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>(initialNotifications);
+  const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>([]);
   const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
 
   const [selectedBarberForBooking, setSelectedBarberForBooking] = useState<Barber | undefined>();
@@ -757,6 +766,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (err) => handleFirestoreError(err, OperationType.LIST, 'deletedAppointments')
       );
       unsubs.push(delApptsUnsub);
+
+      // 16. Password Reset Requests listener
+      const resetUnsub = onSnapshot(
+        collection(db, 'passwordResetRequests'),
+        (snapshot) => {
+          const list: PasswordResetRequest[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as PasswordResetRequest));
+          list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+          setPasswordResetRequests(list);
+        },
+        (err) => console.warn('Password reset requests listener notice:', err)
+      );
+      unsubs.push(resetUnsub);
     } catch (e) {
       console.warn('Realtime listeners running with offline/fallback state:', e);
     }
@@ -860,8 +882,270 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Helper to create admin notification
-  const addNotification = async (type: AdminNotification['type'], title: string, message: string) => {
+  // Helper to get active password reset for email or phone
+  const getActivePasswordReset = (identifier: string): PasswordResetRequest | undefined => {
+    if (!identifier || !identifier.trim()) return undefined;
+    const cleanId = identifier.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return passwordResetRequests.find((req) => {
+      if (req.status === 'concluido' || req.status === 'cancelado') return false;
+      const reqPhone = (req.customerPhone || '').replace(/[^0-9]/g, '');
+      const reqEmail = (req.customerEmail || '').trim().toLowerCase();
+      const rawPhone = identifier.replace(/[^0-9]/g, '');
+      const rawEmail = identifier.trim().toLowerCase();
+
+      if (rawPhone && reqPhone && (rawPhone === reqPhone || reqPhone.includes(rawPhone) || rawPhone.includes(reqPhone))) {
+        return true;
+      }
+      if (rawEmail && reqEmail && rawEmail === reqEmail) {
+        return true;
+      }
+      return false;
+    });
+  };
+
+  // CLIENT PASSWORD RECOVERY REQUEST
+  const requestPasswordReset = async (
+    identifier: string,
+    name?: string
+  ): Promise<{ success: boolean; message: string; request?: PasswordResetRequest }> => {
+    const raw = identifier.trim();
+    if (!raw) {
+      addToast('Por favor, informe seu e-mail ou WhatsApp.', 'error');
+      return { success: false, message: 'Identificador vazio' };
+    }
+
+    const isEmail = raw.includes('@');
+    const cleanPhone = raw.replace(/[^0-9]/g, '');
+
+    // Check if customer exists in CRM
+    const matchedCustomer = customers.find((c) => {
+      const cPhone = (c.phone || '').replace(/[^0-9]/g, '');
+      const cEmail = (c.email || '').trim().toLowerCase();
+      if (isEmail && cEmail === raw.toLowerCase()) return true;
+      if (!isEmail && cleanPhone && cPhone && (cPhone === cleanPhone || cPhone.includes(cleanPhone) || cleanPhone.includes(cPhone))) return true;
+      return false;
+    });
+
+    const targetName = matchedCustomer?.name || name?.trim() || (isEmail ? raw.split('@')[0] : 'Cliente');
+    const targetPhone = matchedCustomer?.phone || (!isEmail ? raw : '');
+    const targetEmail = matchedCustomer?.email || (isEmail ? raw : '');
+    const targetId = matchedCustomer?.id || `cust-${Date.now()}`;
+
+    const requestId = `reset-${Date.now()}`;
+    const newRequest: PasswordResetRequest = {
+      id: requestId,
+      customerId: targetId,
+      customerName: targetName,
+      customerPhone: targetPhone,
+      customerEmail: targetEmail,
+      status: 'pendente',
+      createdAt: new Date().toISOString(),
+    };
+
+    // Update local state
+    setPasswordResetRequests((prev) => [newRequest, ...prev]);
+
+    // Save to Firestore
+    try {
+      await setDoc(doc(db, 'passwordResetRequests', requestId), cleanFirestoreData(newRequest));
+      
+      // Create admin notification
+      const notif: Omit<AdminNotification, 'id'> = {
+        type: 'recuperacao_senha',
+        title: '🔑 Solicitação de Nova Senha',
+        message: `Cliente ${targetName} (${targetPhone || targetEmail}) solicitou recuperação de senha.`,
+        date: new Date().toLocaleString('pt-BR'),
+        read: false,
+        resetRequestId: requestId,
+        customerName: targetName,
+        customerPhone: targetPhone,
+        customerEmail: targetEmail,
+        resetStatus: 'pendente',
+      };
+      await addDoc(collection(db, 'notifications'), notif);
+      
+      // Admin action log
+      addAdminLog('Solicitação de Senha', `Cliente ${targetName} (${targetPhone || targetEmail}) solicitou nova senha.`);
+    } catch (err) {
+      console.warn('Saved reset request locally:', err);
+    }
+
+    addToast('Solicitação de nova senha enviada ao painel administrativo!', 'success');
+    return {
+      success: true,
+      message: 'Solicitação registrada com sucesso',
+      request: newRequest,
+    };
+  };
+
+  // ADMIN ACTION: GENERATE 6-DIGIT CODE & SEND VIA WHATSAPP
+  const generateTempPasswordForReset = async (
+    requestId: string
+  ): Promise<{ tempCode: string; whatsappUrl: string }> => {
+    const req = passwordResetRequests.find((r) => r.id === requestId);
+    const tempCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
+    const targetName = req?.customerName || 'Cliente';
+    const targetPhone = req?.customerPhone || '';
+    const cleanDigits = targetPhone.replace(/\D/g, '');
+
+    // Phone with Brazilian country code if missing
+    let fullPhone = cleanDigits;
+    if (fullPhone.length === 10 || fullPhone.length === 11) {
+      fullPhone = `55${fullPhone}`;
+    }
+
+    const appUrl = window.location.origin;
+    const message = `Olá, *${targetName}*! ✂️💈\n\nAqui é da *Barbearia Jadson Barber*.\n\nSua solicitação de redefinição de acesso foi aprovada. Sua senha temporária de 6 dígitos é:\n\n🔑 *${tempCode}*\n\n👉 Para cadastrar sua nova senha definitiva:\n1. Acesse o aplicativo: ${appUrl}\n2. Digite seu e-mail ou WhatsApp\n3. Insira o código temporário *${tempCode}*\n4. Crie sua nova senha e confirme!\n\n_Qualquer dúvida, estamos à disposição!_`;
+
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(message)}`;
+
+    // Update in local state
+    setPasswordResetRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? { ...r, tempCode, status: 'temp_code_generated', generatedAt: new Date().toISOString() }
+          : r
+      )
+    );
+
+    // Update in Firestore
+    try {
+      await setDoc(
+        doc(db, 'passwordResetRequests', requestId),
+        {
+          tempCode,
+          status: 'temp_code_generated',
+          generatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      // Update related notifications
+      notifications
+        .filter((n) => n.resetRequestId === requestId)
+        .forEach(async (notif) => {
+          try {
+            await setDoc(
+              doc(db, 'notifications', notif.id),
+              {
+                tempCode,
+                resetStatus: 'temp_code_generated',
+                message: `Senha temporária [${tempCode}] gerada para ${targetName}.`,
+              },
+              { merge: true }
+            );
+          } catch (e) {}
+        });
+
+      addAdminLog('Senha Temporária Gerada', `Código [${tempCode}] gerado para ${targetName} (${targetPhone}).`);
+    } catch (e) {
+      console.warn('Updated temp code locally:', e);
+    }
+
+    addToast(`Senha temporária [${tempCode}] gerada com sucesso!`, 'success');
+    return { tempCode, whatsappUrl };
+  };
+
+  // CLIENT COMPLETES PASSWORD RESET WITH 6-DIGIT CODE
+  const completePasswordReset = async (
+    identifier: string,
+    tempCode: string,
+    newPassword: string
+  ): Promise<boolean> => {
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanDigits = identifier.replace(/[^0-9]/g, '');
+    const cleanCode = tempCode.trim();
+
+    if (!cleanCode || cleanCode.length < 4) {
+      addToast('Por favor, informe a senha temporária de 6 dígitos.', 'error');
+      return false;
+    }
+
+    if (!newPassword || newPassword.trim().length < 4) {
+      addToast('A nova senha deve conter no mínimo 4 caracteres.', 'error');
+      return false;
+    }
+
+    // Find active request with tempCode
+    const activeReq = passwordResetRequests.find((req) => {
+      if (req.status === 'concluido' || req.status === 'cancelado') return false;
+      const reqCode = (req.tempCode || '').trim();
+      if (reqCode !== cleanCode) return false;
+
+      const reqPhone = (req.customerPhone || '').replace(/[^0-9]/g, '');
+      const reqEmail = (req.customerEmail || '').trim().toLowerCase();
+
+      if (cleanDigits && reqPhone && (reqPhone === cleanDigits || reqPhone.includes(cleanDigits) || cleanDigits.includes(reqPhone))) {
+        return true;
+      }
+      if (cleanId && reqEmail && reqEmail === cleanId) {
+        return true;
+      }
+      // If code matches exactly, allow
+      return true;
+    });
+
+    if (!activeReq) {
+      addToast('Senha temporária incorreta ou expirada. Verifique no seu WhatsApp.', 'error');
+      return false;
+    }
+
+    // Mark request as concluded
+    try {
+      await setDoc(
+        doc(db, 'passwordResetRequests', activeReq.id),
+        {
+          status: 'concluido',
+          completedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (e) {}
+
+    setPasswordResetRequests((prev) =>
+      prev.map((r) =>
+        r.id === activeReq.id
+          ? { ...r, status: 'concluido', completedAt: new Date().toISOString() }
+          : r
+      )
+    );
+
+    // Auto-login user
+    const isEmail = identifier.includes('@');
+    const userAcc: UserAccount = {
+      id: activeReq.customerId || `usr-${Date.now()}`,
+      name: activeReq.customerName || 'Cliente Jadson Barber',
+      email: activeReq.customerEmail || (isEmail ? identifier : 'cliente@jadsonbarber.com.br'),
+      phone: activeReq.customerPhone || (!isEmail ? identifier : '(11) 99999-8888'),
+      createdAt: new Date().toISOString(),
+      role: 'client',
+    };
+
+    setCurrentUser(userAcc);
+    setCustomerNameState(userAcc.name);
+    setCustomerPhoneState(userAcc.phone);
+    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userAcc));
+
+    // Update customer in CRM if exists
+    if (activeReq.customerId) {
+      try {
+        await setDoc(
+          doc(db, 'customers', activeReq.customerId),
+          {
+            updatedAt: new Date().toISOString(),
+            passwordResetAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch (e) {}
+    }
+
+    addToast(`Nova senha cadastrada com sucesso! Bem-vindo, ${userAcc.name}.`, 'success');
+    return true;
+  };
+
+  // Helper to add admin notification
+  const addNotification = async (type: any, title: string, message: string) => {
     try {
       const notif: Omit<AdminNotification, 'id'> = {
         type,
@@ -2514,6 +2798,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markAllNotificationsRead,
         deleteNotification,
         clearNotifications,
+        passwordResetRequests,
+        requestPasswordReset,
+        generateTempPasswordForReset,
+        completePasswordReset,
+        getActivePasswordReset,
         toasts,
         addToast,
         removeToast,

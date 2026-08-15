@@ -18,6 +18,11 @@ import {
   Music,
   Sliders,
   ExternalLink,
+  KeyRound,
+  MessageSquare,
+  Copy,
+  Sparkles,
+  ShieldAlert,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { NotificationSoundType } from '../../utils/audio';
@@ -37,6 +42,9 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
     markAllNotificationsRead,
     deleteNotification,
     clearNotifications,
+    passwordResetRequests,
+    generateTempPasswordForReset,
+    addToast,
     isSoundMuted,
     toggleSoundMuted,
     soundVolume,
@@ -329,6 +337,9 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
                     if (notif.type === 'agendamento') {
                       IconComponent = Calendar;
                       iconColor = 'text-[#DAA520] bg-amber-950/50 border-amber-500/40';
+                    } else if (notif.type === 'recuperacao_senha') {
+                      IconComponent = KeyRound;
+                      iconColor = 'text-amber-400 bg-amber-950/70 border-amber-500/60 shadow-amber-500/20';
                     } else if (notif.type === 'avaliacao') {
                       IconComponent = Star;
                       iconColor = 'text-yellow-400 bg-yellow-950/40 border-yellow-800/40';
@@ -337,12 +348,21 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
                       iconColor = 'text-red-400 bg-red-950/40 border-red-800/40';
                     }
 
+                    const isPasswordReset = notif.type === 'recuperacao_senha';
+                    const activeResetReq = notif.resetRequestId
+                      ? passwordResetRequests.find((r) => r.id === notif.resetRequestId)
+                      : undefined;
+                    const tempCode = notif.tempCode || activeResetReq?.tempCode;
+                    const hasGeneratedCode = Boolean(tempCode);
+
                     return (
                       <div
                         key={notif.id}
                         onClick={() => handleNotificationClick(notif)}
                         className={`group relative p-3 sm:p-3.5 rounded-xl border transition-all cursor-pointer w-full min-w-0 ${
-                          isUnread
+                          isPasswordReset
+                            ? 'bg-amber-950/30 border-amber-500/50 hover:bg-amber-950/40 shadow-md shadow-amber-500/5'
+                            : isUnread
                             ? 'bg-amber-950/25 border-amber-500/40 hover:bg-amber-950/35 shadow-sm'
                             : 'bg-neutral-900/40 border-neutral-800/70 hover:bg-neutral-800/40 text-neutral-400'
                         }`}
@@ -355,14 +375,19 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
 
                           {/* Content */}
                           <div className="flex-1 min-w-0 pr-7 text-left">
-                            <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                               <span
                                 className={`text-xs font-mono tracking-tight truncate ${
-                                  isUnread ? 'text-white font-black' : 'text-neutral-300 font-bold'
+                                  isUnread || isPasswordReset ? 'text-white font-black' : 'text-neutral-300 font-bold'
                                 }`}
                               >
                                 {notif.title}
                               </span>
+                              {isPasswordReset && (
+                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
+                                  {hasGeneratedCode ? 'Código Enviado' : 'Aguardando Código'}
+                                </span>
+                              )}
                               {isUnread && (
                                 <span className="inline-block w-2 h-2 rounded-full bg-[#DAA520] shrink-0 animate-pulse" />
                               )}
@@ -370,11 +395,79 @@ export const AdminNotificationBell: React.FC<AdminNotificationBellProps> = ({
 
                             <p
                               className={`text-[11px] sm:text-xs mt-1 leading-relaxed text-left break-words ${
-                                isUnread ? 'text-neutral-200' : 'text-neutral-400'
+                                isUnread || isPasswordReset ? 'text-neutral-200' : 'text-neutral-400'
                               }`}
                             >
                               {notif.message}
                             </p>
+
+                            {/* Password Recovery Specific Interactive Action */}
+                            {isPasswordReset && (
+                              <div className="mt-2.5 pt-2.5 border-t border-amber-800/40 space-y-2">
+                                {!hasGeneratedCode ? (
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const targetReqId = notif.resetRequestId || notif.id;
+                                      const res = await generateTempPasswordForReset(targetReqId);
+                                      if (res?.whatsappUrl) {
+                                        window.open(res.whatsappUrl, '_blank');
+                                      }
+                                    }}
+                                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#DAA520] via-amber-400 to-amber-500 text-black font-mono font-black text-xs flex items-center justify-center gap-2 hover:opacity-95 shadow-md shadow-[#DAA520]/25 transition-all cursor-pointer"
+                                  >
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    <span>Gerar Senha 6 Dígitos & Enviar WhatsApp</span>
+                                  </button>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between bg-black/60 px-3 py-2 rounded-xl border border-amber-500/40">
+                                      <div className="flex items-center gap-1.5">
+                                        <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                                        <span className="text-[10px] text-neutral-400 font-mono">Senha Gerada:</span>
+                                      </div>
+                                      <div className="font-mono text-sm font-black text-amber-300 tracking-widest px-2.5 py-0.5 bg-amber-950/80 rounded-lg border border-amber-500/50">
+                                        {tempCode}
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const targetName = notif.customerName || activeResetReq?.customerName || 'Cliente';
+                                          const targetPhone = notif.customerPhone || activeResetReq?.customerPhone || '';
+                                          const cleanDigits = targetPhone.replace(/\D/g, '');
+                                          let fullPhone = cleanDigits.length === 10 || cleanDigits.length === 11 ? `55${cleanDigits}` : cleanDigits;
+                                          const appUrl = window.location.origin;
+                                          const msg = `Olá, *${targetName}*! ✂️💈\n\nAqui é da *Barbearia Jadson Barber*.\n\nSua senha temporária de 6 dígitos para redefinir seu acesso é:\n\n🔑 *${tempCode}*\n\n👉 Acesse o aplicativo (${appUrl}), informe seu WhatsApp/E-mail, digite este código temporário e defina sua nova senha.`;
+                                          window.open(`https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(msg)}`, '_blank');
+                                        }}
+                                        className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-[11px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                      >
+                                        <MessageSquare className="w-3 h-3" />
+                                        <span>Reenviar WhatsApp</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (tempCode) {
+                                            navigator.clipboard.writeText(tempCode);
+                                            addToast(`Código [${tempCode}] copiado!`, 'info');
+                                          }
+                                        }}
+                                        className="py-1.5 px-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-mono font-bold text-[11px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                      >
+                                        <Copy className="w-3 h-3" />
+                                        <span>Copiar Código</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
 
                             <div className="flex items-center justify-between gap-1.5 mt-2.5 pt-2 border-t border-neutral-800/50 text-[10px] text-neutral-500 font-mono flex-wrap">
                               <span className="shrink-0">{notif.date}</span>

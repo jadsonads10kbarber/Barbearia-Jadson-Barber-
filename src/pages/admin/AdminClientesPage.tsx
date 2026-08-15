@@ -89,7 +89,8 @@ export const AdminClientesPage: React.FC = () => {
   // Coupon for Customer Modal state
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
   const [couponTargetCustomer, setCouponTargetCustomer] = useState<Customer | null>(null);
-  const [couponTab, setCouponTab] = useState<'novo' | 'existentes'>('novo');
+  const [couponTab, setCouponTab] = useState<'disponibilizar' | 'existentes' | 'novo'>('disponibilizar');
+  const [couponSearchFilter, setCouponSearchFilter] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscountType, setCouponDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [couponDiscountValue, setCouponDiscountValue] = useState('15');
@@ -120,7 +121,8 @@ export const AdminClientesPage: React.FC = () => {
   const handleOpenCouponModal = (customer: Customer, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setCouponTargetCustomer(customer);
-    setCouponTab('novo');
+    setCouponTab('disponibilizar');
+    setCouponSearchFilter('');
     setCouponCode(generatePersonalizedCode(customer.name));
     setCouponDiscountType('percentage');
     setCouponDiscountValue('15');
@@ -745,28 +747,187 @@ export const AdminClientesPage: React.FC = () => {
             <div className="flex bg-black p-1 rounded-xl border border-neutral-800">
               <button
                 type="button"
-                onClick={() => setCouponTab('novo')}
-                className={`flex-1 py-2 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
-                  couponTab === 'novo' ? 'bg-[#DAA520] text-black' : 'text-neutral-400 hover:text-white'
+                onClick={() => setCouponTab('disponibilizar')}
+                className={`flex-1 py-2 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                  couponTab === 'disponibilizar' ? 'bg-[#DAA520] text-black shadow-md shadow-[#DAA520]/20' : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                Criar Novo Cupom Exclusivo
+                <TicketPercent className="w-3.5 h-3.5" />
+                <span>Cupons Cadastrados ({coupons.length})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setCouponTab('existentes')}
-                className={`flex-1 py-2 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
-                  couponTab === 'existentes' ? 'bg-[#DAA520] text-black' : 'text-neutral-400 hover:text-white'
+                className={`flex-1 py-2 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                  couponTab === 'existentes' ? 'bg-[#DAA520] text-black shadow-md shadow-[#DAA520]/20' : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                <TicketPercent className="w-3.5 h-3.5" />
-                Cupons Deste Cliente ({getCustomerCoupons(couponTargetCustomer.id, couponTargetCustomer.phone, couponTargetCustomer.name).length})
+                <Users className="w-3.5 h-3.5" />
+                <span>Deste Cliente ({getCustomerCoupons(couponTargetCustomer.id, couponTargetCustomer.phone, couponTargetCustomer.name).length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCouponTab('novo')}
+                className={`flex-1 py-2 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                  couponTab === 'novo' ? 'bg-[#DAA520] text-black shadow-md shadow-[#DAA520]/20' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Criar Novo</span>
               </button>
             </div>
 
-            {/* TAB 1: FORMULÁRIO DE NOVO CUPOM */}
-            {couponTab === 'novo' ? (
+            {/* TAB 1: DISPONIBILIZAR CUPOM JÁ CADASTRADO NO SISTEMA */}
+            {couponTab === 'disponibilizar' && (
+              <div className="space-y-3">
+                {/* Search / Filter for registered coupons */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={couponSearchFilter}
+                    onChange={(e) => setCouponSearchFilter(e.target.value)}
+                    placeholder="Filtrar cupons cadastrados por código..."
+                    className="w-full bg-black/80 border border-neutral-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#DAA520] font-mono"
+                  />
+                  {couponSearchFilter && (
+                    <button
+                      onClick={() => setCouponSearchFilter('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
+                  <span>Escolha um cupom para enviar diretamente ao WhatsApp de <strong>{couponTargetCustomer.name}</strong>:</span>
+                  <span className="text-amber-400 font-bold">{coupons.filter(c => !couponSearchFilter || c.code.toLowerCase().includes(couponSearchFilter.toLowerCase())).length} disponíveis</span>
+                </div>
+
+                {/* List of registered coupons */}
+                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                  {coupons.length === 0 ? (
+                    <div className="p-8 text-center bg-black/60 rounded-2xl border border-neutral-800 space-y-3">
+                      <TicketPercent className="w-10 h-10 mx-auto text-neutral-600 opacity-40" />
+                      <p className="text-xs text-neutral-400 font-mono">
+                        Nenhum cupom cadastrado no sistema ainda.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setCouponTab('novo')}
+                        className="px-4 py-2 bg-[#DAA520] text-black font-bold text-xs font-mono rounded-xl cursor-pointer"
+                      >
+                        Cadastrar Primeiro Cupom
+                      </button>
+                    </div>
+                  ) : (
+                    coupons
+                      .filter((c) => !couponSearchFilter || c.code.toLowerCase().includes(couponSearchFilter.toLowerCase()))
+                      .map((c) => {
+                        const isActive = c.status === 'ativo';
+                        const isCopied = copiedCode === c.code;
+                        const isIndividualForOther = c.type === 'individual' && c.targetCustomerId && c.targetCustomerId !== couponTargetCustomer.id;
+
+                        return (
+                          <div
+                            key={c.id}
+                            className={`p-3.5 bg-black/80 rounded-2xl border transition-all ${
+                              isActive ? 'border-neutral-800 hover:border-amber-500/40' : 'border-neutral-800/40 opacity-60'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-start gap-2.5 min-w-0">
+                                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5">
+                                  <TicketPercent className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-mono font-black text-sm text-amber-400 tracking-wider">
+                                      {c.code}
+                                    </span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                                        isActive
+                                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                          : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                                      }`}
+                                    >
+                                      {isActive ? 'Ativo' : 'Inativo'}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-neutral-800 text-neutral-300 border border-neutral-700">
+                                      {c.type === 'individual' ? 'Individual' : 'Geral'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-neutral-300 font-mono mt-1">
+                                    Desconto de{' '}
+                                    <strong className="text-emerald-400">
+                                      {c.discountType === 'percentage'
+                                        ? `${c.discountValue}% OFF`
+                                        : `R$ ${c.discountValue.toFixed(2)} OFF`}
+                                    </strong>
+                                    {c.minOrderValue && c.minOrderValue > 0 ? ` • Mínimo R$ ${c.minOrderValue.toFixed(2)}` : ''}
+                                    {c.endDate ? ` • Válido até ${c.endDate}` : ''}
+                                  </div>
+                                  {isIndividualForOther && (
+                                    <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
+                                      * Vinculado originalmente a: {c.targetCustomerName || 'Outro cliente'}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                {/* Copy Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyCode(c.code)}
+                                  className="px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition-colors cursor-pointer text-xs font-mono flex items-center gap-1"
+                                  title="Copiar código"
+                                >
+                                  {isCopied ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>Copiado!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3.5 h-3.5" />
+                                      <span>Copiar</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                {/* Send via WhatsApp Button */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleSendCouponWhatsApp(
+                                      couponTargetCustomer,
+                                      c.code,
+                                      c.discountType,
+                                      c.discountValue,
+                                      c.endDate
+                                    )
+                                  }
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                                  title="Disponibilizar e Enviar no WhatsApp"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>Enviar WhatsApp</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: FORMULÁRIO DE NOVO CUPOM */}
+            {couponTab === 'novo' && (
               <div className="space-y-4">
                 {/* Código do Cupom */}
                 <div>
@@ -990,8 +1151,10 @@ export const AdminClientesPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-            ) : (
-              /* TAB 2: LISTAGEM DE CUPONS DESTE CLIENTE */
+            )}
+
+            {/* TAB 3: LISTAGEM DE CUPONS DESTE CLIENTE */}
+            {couponTab === 'existentes' && (
               <div className="space-y-3">
                 {(() => {
                   const clientCoupons = getCustomerCoupons(

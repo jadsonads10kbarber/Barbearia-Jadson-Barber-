@@ -81,6 +81,20 @@
         "reason": { "type": "string", "maxLength": 500 }
       },
       "required": ["originalAppointmentId", "deletedAt", "deletedBy"]
+    },
+    "PasswordResetRequest": {
+      "title": "PasswordResetRequest",
+      "description": "Client password reset request and 6-digit temp code",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerPhone": { "type": "string", "maxLength": 50 },
+        "customerEmail": { "type": "string", "maxLength": 100 },
+        "tempCode": { "type": "string", "maxLength": 10 },
+        "status": { "type": "string", "enum": ["pendente", "temp_code_generated", "concluido", "cancelado"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["customerName", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -103,6 +117,10 @@
     "/deletedAppointments/{delId}": {
       "schema": { "$ref": "#/entities/DeletedAppointmentRecord" },
       "description": "Deleted and archived appointments audit log"
+    },
+    "/passwordResetRequests/{reqId}": {
+      "schema": { "$ref": "#/entities/PasswordResetRequest" },
+      "description": "Customer password reset requests"
     }
   }
 }

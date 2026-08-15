@@ -108,5 +108,10 @@ service cloud.firestore {
     match /deletedAppointments/{delId} {
       allow read, write: if true;
     }
+
+    // Password Reset Requests
+    match /passwordResetRequests/{reqId} {
+      allow read, write: if true;
+    }
   }
 }
