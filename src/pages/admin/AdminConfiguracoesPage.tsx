@@ -1,10 +1,46 @@
-import React, { useState } from 'react';
-import { Settings, Save, MapPin, Phone, Instagram, QrCode, Database, CheckCircle2, ExternalLink, Search, Navigation } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  Settings,
+  Save,
+  MapPin,
+  Phone,
+  Instagram,
+  QrCode,
+  Database,
+  CheckCircle2,
+  ExternalLink,
+  Search,
+  Navigation,
+  Bell,
+  Volume2,
+  VolumeX,
+  Volume1,
+  Upload,
+  Play,
+  RotateCcw,
+  Music,
+  Check,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from '../../components/admin/AdminLayout';
+import { NotificationSoundType } from '../../utils/audio';
 
 export const AdminConfiguracoesPage: React.FC = () => {
-  const { barbershopInfo, updateSettings, addToast } = useApp();
+  const {
+    barbershopInfo,
+    updateSettings,
+    addToast,
+    isSoundMuted,
+    toggleSoundMuted,
+    soundVolume,
+    setSoundVolume,
+    soundType,
+    setSoundType,
+    customSoundName,
+    uploadCustomSound,
+    resetToDefaultSound,
+    testNotificationSound,
+  } = useApp();
 
   const [name, setName] = useState(barbershopInfo.name || 'Barbearia Jadson Barber');
   const [cep, setCep] = useState(barbershopInfo.cep || '44086-402');
@@ -15,6 +51,66 @@ export const AdminConfiguracoesPage: React.FC = () => {
   const [instagram, setInstagram] = useState(barbershopInfo.instagram || '@jadsonbarberbarbearia');
   const [pixKey, setPixKey] = useState(barbershopInfo.pixKey || '75983137171');
   const [loadingCep, setLoadingCep] = useState(false);
+  const [isPlayingTest, setIsPlayingTest] = useState(false);
+  const [isUploadingSound, setIsUploadingSound] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleTestSound = () => {
+    setIsPlayingTest(true);
+    testNotificationSound();
+    setTimeout(() => setIsPlayingTest(false), 1200);
+  };
+
+  const handleSoundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSound(true);
+    await uploadCustomSound(file);
+    setIsUploadingSound(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const soundOptions: { id: NotificationSoundType; label: string; desc: string; icon: string }[] = [
+    {
+      id: 'bell',
+      label: 'Sino Dourado (Padrão)',
+      desc: 'Toque harmônico e cristalino de balcão',
+      icon: '🔔',
+    },
+    {
+      id: 'cash',
+      label: 'Caixa Registradora',
+      desc: 'Som clássico vibrante de venda/agendamento',
+      icon: '💰',
+    },
+    {
+      id: 'chime',
+      label: 'Chime Harmônico',
+      desc: 'Escala ascendente suave e moderna',
+      icon: '✨',
+    },
+    {
+      id: 'marimba',
+      label: 'Marimba Acústica',
+      desc: 'Acorde orgânico e acolhedor',
+      icon: '🎵',
+    },
+    {
+      id: 'success',
+      label: 'Triunfo Moderno',
+      desc: 'Notificação digital refinada',
+      icon: '🎯',
+    },
+    {
+      id: 'custom',
+      label: customSoundName ? `Arquivo: ${customSoundName}` : 'Áudio do Dispositivo',
+      desc: customSoundName ? 'Arquivo salvo no seu aparelho' : 'Carregue um arquivo .mp3 ou .wav do seu aparelho',
+      icon: '📁',
+    },
+  ];
 
   // Busca rápida de CEP no ViaCEP
   const handleSearchCep = async () => {
@@ -265,6 +361,208 @@ export const AdminConfiguracoesPage: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* NOTIFICAÇÕES SONORAS & ALERTA DE AGENDAMENTO */}
+      <div className="bg-[#111111] border border-neutral-800 rounded-2xl p-5 sm:p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#DAA520]/20 text-[#DAA520] border border-[#DAA520]/30 flex items-center justify-center">
+              <Bell className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black font-mono tracking-tight text-white uppercase flex items-center gap-2">
+                <span>Notificação Sonora de Agendamentos</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-[10px] font-bold">
+                  Tempo Real
+                </span>
+              </h2>
+              <p className="text-xs text-neutral-400 font-sans">
+                Emite um efeito sonoro instantâneo toda vez que um cliente realizar um agendamento com o painel aberto.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleSoundMuted}
+              className={`py-2 px-4 rounded-xl font-mono text-xs font-bold border transition-colors flex items-center gap-2 cursor-pointer ${
+                isSoundMuted
+                  ? 'bg-red-950/40 border-red-800/50 text-red-400 hover:bg-red-900/60'
+                  : 'bg-emerald-950/40 border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/60'
+              }`}
+            >
+              {isSoundMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              <span>{isSoundMuted ? 'Som Silenciado (Mudo)' : 'Som Ativo'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Volume & Test Controls */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Volume Box */}
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-mono font-bold uppercase text-white flex items-center gap-2">
+                {soundVolume === 0 || isSoundMuted ? (
+                  <VolumeX className="w-4 h-4 text-red-400" />
+                ) : soundVolume < 50 ? (
+                  <Volume1 className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <Volume2 className="w-4 h-4 text-[#DAA520]" />
+                )}
+                <span>Controle de Volume</span>
+              </label>
+              <span className="text-xs font-mono font-black text-[#DAA520]">
+                {isSoundMuted ? 'Silenciado' : `${soundVolume}%`}
+              </span>
+            </div>
+
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={soundVolume}
+              onChange={(e) => setSoundVolume(Number(e.target.value))}
+              disabled={isSoundMuted}
+              className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-[#DAA520] disabled:opacity-40"
+            />
+
+            <div className="flex justify-between text-[10px] text-neutral-500 font-mono">
+              <span>0% (Mudo)</span>
+              <span>50%</span>
+              <span>100% (Volume Máximo)</span>
+            </div>
+          </div>
+
+          {/* Test Action Box */}
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-3">
+            <div>
+              <div className="text-xs font-mono font-bold uppercase text-white">
+                Demonstração de Áudio
+              </div>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Clique para escutar como soará a notificação quando um agendamento entrar.
+              </p>
+            </div>
+
+            <button
+              onClick={handleTestSound}
+              disabled={isPlayingTest}
+              className="w-full py-2.5 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono font-black text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 shadow-md"
+            >
+              <Play className={`w-4 h-4 fill-current ${isPlayingTest ? 'animate-spin' : ''}`} />
+              <span>{isPlayingTest ? 'Reproduzindo Som...' : 'Testar Notificação Sonora'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Escolha do Som / Carregar do Dispositivo */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-mono font-bold uppercase text-neutral-300 flex items-center gap-1.5">
+              <Music className="w-3.5 h-3.5 text-[#DAA520]" />
+              <span>Efeito Sonoro Padrão & Personalizado</span>
+            </h3>
+            {soundType === 'custom' && (
+              <button
+                onClick={resetToDefaultSound}
+                className="text-xs text-neutral-400 hover:text-amber-400 font-mono flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Restaurar Sino Padrão
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {soundOptions.map((opt) => {
+              const isSelected = soundType === opt.id;
+              return (
+                <div
+                  key={opt.id}
+                  onClick={() => setSoundType(opt.id)}
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                    isSelected
+                      ? 'bg-[#DAA520]/15 border-[#DAA520] shadow-sm'
+                      : 'bg-neutral-900/60 border-neutral-800 hover:bg-neutral-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-2xl shrink-0">{opt.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold font-mono text-white flex items-center gap-2">
+                        <span className="truncate">{opt.label}</span>
+                      </div>
+                      <p className="text-[11px] text-neutral-400 truncate">{opt.desc}</p>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 ml-2">
+                    {isSelected ? (
+                      <div className="w-5 h-5 rounded-full bg-[#DAA520] text-black flex items-center justify-center">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full border border-neutral-700" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Upload do Dispositivo */}
+        <div className="p-4 rounded-xl bg-black/60 border border-neutral-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="text-xs font-mono font-bold uppercase text-white flex items-center gap-2">
+              <Upload className="w-4 h-4 text-[#DAA520]" />
+              <span>Importar Som Personalizado do Dispositivo</span>
+              {customSoundName && (
+                <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/40">
+                  {customSoundName}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-neutral-400">
+              Faça upload de qualquer áudio (.mp3, .wav, .ogg, .m4a) armazenado no seu smartphone ou computador.
+            </p>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac"
+            onChange={handleSoundUpload}
+            className="hidden"
+            id="page-sound-upload-input"
+          />
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingSound}
+              className="py-2.5 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-white font-mono text-xs font-bold uppercase transition-colors flex items-center gap-2 cursor-pointer shrink-0"
+            >
+              <Upload className="w-3.5 h-3.5 text-[#DAA520]" />
+              <span>{isUploadingSound ? 'Importando...' : 'Buscar Áudio no Aparelho'}</span>
+            </button>
+
+            {customSoundName && (
+              <button
+                type="button"
+                onClick={resetToDefaultSound}
+                className="p-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
+                title="Remover e voltar ao padrão"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
     </AdminLayout>
   );

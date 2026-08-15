@@ -14,7 +14,12 @@ import {
 } from 'firebase/firestore';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { playNotificationSound as playAudioEffect, NotificationSoundType } from '../utils/audio';
+import {
+  playNotificationSound as playAudioEffect,
+  NotificationSoundType,
+  LOCAL_STORAGE_CUSTOM_SOUND_KEY,
+  LOCAL_STORAGE_CUSTOM_SOUND_NAME_KEY,
+} from '../utils/audio';
 import {
   Barber,
   ServiceItem,
@@ -229,6 +234,9 @@ interface AppContextType {
   setSoundVolume: (volume: number) => void;
   soundType: NotificationSoundType;
   setSoundType: (type: NotificationSoundType) => void;
+  customSoundName: string | null;
+  uploadCustomSound: (file: File) => Promise<boolean>;
+  resetToDefaultSound: () => void;
   playNotificationSound: (type?: NotificationSoundType) => void;
   testNotificationSound: () => void;
   markNotificationRead: (id: string) => void;
@@ -405,6 +413,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return '(11) 99999-8888';
   });
 
+  // Notifications & Sound State
+  const [isSoundMuted, setIsSoundMutedState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_SOUND_MUTED_KEY);
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [soundVolume, setSoundVolumeState] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_SOUND_VOLUME_KEY);
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) return parsed;
+      }
+    } catch {}
+    return 80;
+  });
+
+  const [soundType, setSoundTypeState] = useState<NotificationSoundType>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_SOUND_TYPE_KEY);
+      if (saved && ['bell', 'cash', 'chime', 'marimba', 'success', 'custom'].includes(saved)) {
+        return saved as NotificationSoundType;
+      }
+    } catch {}
+    return 'bell';
+  });
+
+  const [customSoundName, setCustomSoundName] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LOCAL_STORAGE_CUSTOM_SOUND_NAME_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [customSoundData, setCustomSoundData] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LOCAL_STORAGE_CUSTOM_SOUND_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const playSoundRef = useRef<(type?: NotificationSoundType) => void>(() => {});
+  const isInitialApptsLoad = useRef(true);
+
   // Attach Firestore Realtime Listeners
   useEffect(() => {
     let unsubs: (() => void)[] = [];
@@ -421,6 +479,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Sort by date/startTime desc
           list.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
           setAppointments(list);
+
+          // Trigger sound effect for newly added appointments arriving in real-time
+          if (!isInitialApptsLoad.current) {
+            const hasNewAdditions = snapshot.docChanges().some((change) => change.type === 'added');
+            if (hasNewAdditions) {
+              playSoundRef.current();
+            }
+          } else {
+            isInitialApptsLoad.current = false;
+          }
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'appointments')
       );
@@ -588,6 +656,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snapshot) => {
           const list: AdminNotification[] = [];
           snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as AdminNotification));
+          // Sort unread first, then by date descending
+          list.sort((a, b) => {
+            if (a.read !== b.read) return a.read ? 1 : -1;
+            return (b.date || '').localeCompare(a.date || '');
+          });
           setNotifications(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'notifications')
@@ -727,6 +800,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         read: false,
       };
       await addDoc(collection(db, 'notifications'), notif);
+      playSoundRef.current();
     } catch (e) {
       console.error('Error creating notification:', e);
     }
@@ -1870,7 +1944,123 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // NOTIFICATIONS
+  // NOTIFICATIONS & SOUND METHODS
+  const setIsSoundMuted = (muted: boolean) => {
+    setIsSoundMutedState(muted);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_SOUND_MUTED_KEY, String(muted));
+    } catch {}
+  };
+
+  const toggleSoundMuted = () => {
+    setIsSoundMutedState((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(LOCAL_STORAGE_SOUND_MUTED_KEY, String(next));
+      } catch {}
+      addToast(next ? 'Notificações sonoras silenciadas.' : 'Notificações sonoras ativadas.', 'info');
+      if (!next) {
+        // Play quick feedback
+        playAudioEffect(soundVolume, false, soundType, customSoundData);
+      }
+      return next;
+    });
+  };
+
+  const setSoundVolume = (vol: number) => {
+    const clamped = Math.max(0, Math.min(100, vol));
+    setSoundVolumeState(clamped);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_SOUND_VOLUME_KEY, String(clamped));
+    } catch {}
+  };
+
+  const setSoundType = (type: NotificationSoundType) => {
+    setSoundTypeState(type);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_SOUND_TYPE_KEY, type);
+    } catch {}
+    // Play sample
+    playAudioEffect(soundVolume, false, type, customSoundData);
+  };
+
+  const uploadCustomSound = async (file: File): Promise<boolean> => {
+    try {
+      if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)) {
+        addToast('Por favor, selecione um arquivo de áudio válido (.mp3, .wav, .ogg, .m4a).', 'error');
+        return false;
+      }
+
+      // Max 4.5MB to ensure safe storage in localStorage
+      if (file.size > 4.5 * 1024 * 1024) {
+        addToast('O arquivo de áudio deve ter no máximo 4.5MB.', 'error');
+        return false;
+      }
+
+      return new Promise<boolean>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          if (result) {
+            setCustomSoundData(result);
+            setCustomSoundName(file.name);
+            setSoundTypeState('custom');
+            try {
+              localStorage.setItem(LOCAL_STORAGE_CUSTOM_SOUND_KEY, result);
+              localStorage.setItem(LOCAL_STORAGE_CUSTOM_SOUND_NAME_KEY, file.name);
+              localStorage.setItem(LOCAL_STORAGE_SOUND_TYPE_KEY, 'custom');
+            } catch (err) {
+              console.warn('Storage error on sound upload', err);
+            }
+            playAudioEffect(soundVolume, false, 'custom', result);
+            addToast(`Som "${file.name}" carregado do dispositivo com sucesso!`, 'success');
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        };
+        reader.onerror = () => {
+          addToast('Erro ao ler o arquivo de áudio do dispositivo.', 'error');
+          resolve(false);
+        };
+        reader.readAsDataURL(file);
+      });
+    } catch (err) {
+      console.error('Error uploading custom sound', err);
+      addToast('Erro ao processar áudio.', 'error');
+      return false;
+    }
+  };
+
+  const resetToDefaultSound = () => {
+    setCustomSoundData(null);
+    setCustomSoundName(null);
+    setSoundTypeState('bell');
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_CUSTOM_SOUND_KEY);
+      localStorage.removeItem(LOCAL_STORAGE_CUSTOM_SOUND_NAME_KEY);
+      localStorage.setItem(LOCAL_STORAGE_SOUND_TYPE_KEY, 'bell');
+    } catch {}
+    playAudioEffect(soundVolume, false, 'bell', null);
+    addToast('Som de notificação restaurado para o padrão (Sino Dourado).', 'success');
+  };
+
+  const playNotificationSound = (type?: NotificationSoundType) => {
+    playAudioEffect(soundVolume, isSoundMuted, type || soundType, customSoundData);
+  };
+
+  const testNotificationSound = () => {
+    playAudioEffect(soundVolume > 0 ? soundVolume : 80, false, soundType, customSoundData);
+    addToast('Tocando som de notificação...', 'info');
+  };
+
+  // Keep playSoundRef in sync
+  useEffect(() => {
+    playSoundRef.current = (type?: NotificationSoundType) => {
+      playAudioEffect(soundVolume, isSoundMuted, type || soundType, customSoundData);
+    };
+  }, [soundVolume, isSoundMuted, soundType, customSoundData]);
+
   const markNotificationRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
@@ -1878,9 +2068,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateDoc(doc(db, 'notifications', id), { read: true }).catch(() => {});
   };
 
+  const markAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    notifications.forEach((n) => {
+      if (!n.read) {
+        updateDoc(doc(db, 'notifications', n.id), { read: true }).catch(() => {});
+      }
+    });
+    addToast('Todas as notificações foram marcadas como lidas.', 'info');
+  };
+
+  const deleteNotification = async (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await deleteDoc(doc(db, 'notifications', id));
+    } catch {}
+  };
+
   const clearNotifications = () => {
     setNotifications([]);
-    addToast('Notificações limpas.', 'info');
+    notifications.forEach((n) => {
+      deleteDoc(doc(db, 'notifications', n.id)).catch(() => {});
+    });
+    addToast('Todas as notificações foram limpas.', 'info');
   };
 
   return (
@@ -1962,7 +2172,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dismissAppointmentReview,
         reviewedAppointmentIds,
         updateSettings,
+        isSoundMuted,
+        setIsSoundMuted,
+        toggleSoundMuted,
+        soundVolume,
+        setSoundVolume,
+        soundType,
+        setSoundType,
+        customSoundName,
+        uploadCustomSound,
+        resetToDefaultSound,
+        playNotificationSound,
+        testNotificationSound,
         markNotificationRead,
+        markAllNotificationsRead,
+        deleteNotification,
         clearNotifications,
         toasts,
         addToast,

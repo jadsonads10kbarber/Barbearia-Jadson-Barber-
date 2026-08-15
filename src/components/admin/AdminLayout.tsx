@@ -16,16 +16,14 @@ import {
   LogOut,
   Menu,
   X,
-  Bell,
   Sun,
   Moon,
   ChevronRight,
   ShieldCheck,
-  Check,
-  Trash2,
 } from 'lucide-react';
 import { useApp, ActivePage } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
+import { AdminNotificationBell } from './AdminNotificationBell';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -39,16 +37,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title, subti
     setActivePage,
     adminUser,
     logoutAdmin,
-    notifications,
-    markNotificationRead,
-    clearNotifications,
   } = useApp();
   const { theme, toggleTheme } = useTheme();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isNotifOpen, setIsNotifOpen] = useState(false);
-
-  const unreadNotifsCount = notifications.filter((n) => !n.read).length;
 
   const menuItems: { id: ActivePage; label: string; icon: React.ReactNode }[] = [
     { id: 'admin-dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -91,18 +83,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title, subti
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Notifications button */}
-          <button
-            onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className="relative p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white transition-colors"
-          >
-            <Bell className="w-4 h-4" />
-            {unreadNotifsCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black font-mono font-bold text-[9px] flex items-center justify-center">
-                {unreadNotifsCount}
-              </span>
-            )}
-          </button>
+          {/* Notifications Bell with Sound Controls */}
+          <AdminNotificationBell align="right" />
 
           <button
             onClick={() => handleNavigate('agenda')}
@@ -275,70 +257,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title, subti
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Notifications Button */}
-            <div className="relative">
-              <button
-                onClick={() => setIsNotifOpen(!isNotifOpen)}
-                className="p-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition-colors relative cursor-pointer"
-                title="Notificações Administrativas"
-              >
-                <Bell className="w-4 h-4" />
-                {unreadNotifsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#DAA520] text-black font-mono font-bold text-[9px] flex items-center justify-center shadow-md">
-                    {unreadNotifsCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Notifications Dropdown Drawer */}
-              {isNotifOpen && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#111111] border border-neutral-800 rounded-2xl shadow-2xl p-4 z-50 animate-fadeIn space-y-3">
-                  <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                    <div className="flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-[#DAA520]" />
-                      <span className="text-xs font-mono font-bold uppercase text-white">
-                        Notificações ({notifications.length})
-                      </span>
-                    </div>
-                    {notifications.length > 0 && (
-                      <button
-                        onClick={clearNotifications}
-                        className="text-[10px] text-neutral-400 hover:text-red-400 font-mono uppercase flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Limpar
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-                    {notifications.length === 0 ? (
-                      <p className="text-xs text-neutral-500 text-center py-6 font-mono">
-                        Nenhuma notificação recente.
-                      </p>
-                    ) : (
-                      notifications.map((notif) => (
-                        <div
-                          key={notif.id}
-                          onClick={() => markNotificationRead(notif.id)}
-                          className={`p-3 rounded-xl border transition-colors cursor-pointer space-y-1 ${
-                            notif.read
-                              ? 'bg-neutral-900/40 border-neutral-800/60 text-neutral-400'
-                              : 'bg-amber-950/20 border-amber-500/30 text-white'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-xs font-bold">
-                            <span className="text-amber-400 font-mono text-[11px]">{notif.title}</span>
-                            <span className="text-[10px] text-neutral-500">{notif.date}</span>
-                          </div>
-                          <p className="text-xs leading-relaxed text-neutral-300">{notif.message}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Notifications Bell with Full Controls */}
+            <AdminNotificationBell align="right" />
 
             {/* Theme Toggle Button */}
             <button
