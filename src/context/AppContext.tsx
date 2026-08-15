@@ -2012,10 +2012,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(LOCAL_STORAGE_SOUND_MUTED_KEY, String(next));
       } catch {}
       addToast(next ? 'Notificações sonoras silenciadas.' : 'Notificações sonoras ativadas.', 'info');
-      if (!next) {
-        // Play quick feedback
-        playAudioEffect(soundVolume, false, soundType, customSoundData);
-      }
       return next;
     });
   };
@@ -2033,8 +2029,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.setItem(LOCAL_STORAGE_SOUND_TYPE_KEY, type);
     } catch {}
-    // Play sample
-    playAudioEffect(soundVolume, false, type, customSoundData);
+    // Play sample ONLY if audio is actively enabled, volume is above 0, and on admin page
+    if (!isSoundMuted && soundVolume > 0 && activePage.startsWith('admin-')) {
+      playAudioEffect(soundVolume, false, type, customSoundData);
+    }
   };
 
   const uploadCustomSound = async (file: File): Promise<boolean> => {
@@ -2065,7 +2063,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             } catch (err) {
               console.warn('Storage error on sound upload', err);
             }
-            playAudioEffect(soundVolume, false, 'custom', result);
+            if (!isSoundMuted && soundVolume > 0 && activePage.startsWith('admin-')) {
+              playAudioEffect(soundVolume, false, 'custom', result);
+            }
             addToast(`Som "${file.name}" carregado do dispositivo com sucesso!`, 'success');
             resolve(true);
           } else {
@@ -2094,7 +2094,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem(LOCAL_STORAGE_CUSTOM_SOUND_NAME_KEY);
       localStorage.setItem(LOCAL_STORAGE_SOUND_TYPE_KEY, 'bell');
     } catch {}
-    playAudioEffect(soundVolume, false, 'bell', null, true);
+    if (!isSoundMuted && soundVolume > 0 && activePage.startsWith('admin-')) {
+      playAudioEffect(soundVolume, false, 'bell', null, true);
+    }
     addToast('Som de notificação restaurado para o padrão (Sino Dourado).', 'success');
   };
 
@@ -2106,7 +2108,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const testNotificationSound = () => {
-    playAudioEffect(soundVolume > 0 ? soundVolume : 80, false, soundType, customSoundData, true);
+    if (isSoundMuted || soundVolume <= 0) {
+      addToast('O som está silenciado ou com volume zerado.', 'info');
+      return;
+    }
+    playAudioEffect(soundVolume, false, soundType, customSoundData, true);
     addToast('Tocando som de notificação...', 'info');
   };
 

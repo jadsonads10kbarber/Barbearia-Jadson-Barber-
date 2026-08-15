@@ -50,6 +50,7 @@ if (typeof window !== 'undefined') {
 function playCustomDeviceAudio(audioDataUri: string, volume: number): void {
   try {
     if (!audioDataUri || !audioDataUri.startsWith('data:audio/')) return;
+    if (volume <= 0) return;
     const audio = new Audio(audioDataUri);
     audio.volume = Math.max(0, Math.min(1, volume / 100));
     const playPromise = audio.play();
@@ -80,17 +81,13 @@ export function playNotificationSound(
   customAudioUri?: string | null,
   forcePlay = false
 ): void {
-  // If muted or volume 0, strictly return
-  if (!forcePlay) {
-    if (isMuted || volume <= 0) return;
-    try {
-      if (typeof window !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_SOUND_MUTED_KEY) === 'true') {
-        return;
-      }
-    } catch {}
-  } else if (volume <= 0) {
-    return;
-  }
+  // If muted or volume 0, strictly return immediately
+  if (isMuted || volume <= 0) return;
+  try {
+    if (typeof window !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_SOUND_MUTED_KEY) === 'true') {
+      return;
+    }
+  } catch {}
 
   const nowMs = Date.now();
   if (!forcePlay && nowMs - lastSoundTime < SOUND_COOLDOWN_MS) {

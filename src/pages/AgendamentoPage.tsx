@@ -87,30 +87,6 @@ export const AgendamentoPage: React.FC = () => {
   const [processingStage, setProcessingStage] = useState<number>(1);
   const [processingProgress, setProcessingProgress] = useState<number>(10);
 
-  const playSuccessChime = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const now = ctx.currentTime;
-
-      [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.15, now + idx * 0.09);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.35);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + idx * 0.09);
-        osc.stop(now + idx * 0.09 + 0.4);
-      });
-    } catch (e) {
-      console.warn('Audio playback failed', e);
-    }
-  };
-
   // Auto-scroll ref for time slot selection
   const continueBtnStep3Ref = useRef<HTMLButtonElement | null>(null);
   const scrollTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -689,7 +665,6 @@ export const AgendamentoPage: React.FC = () => {
       // Brief delay so user sees 100% full life bar before switching to success screen
       await new Promise((res) => setTimeout(res, 500));
 
-      playSuccessChime();
       setCurrentStep(7); // Step 7: Success
     } catch (e) {
       addToast('Não foi possível realizar o agendamento. Tente novamente.', 'error');
