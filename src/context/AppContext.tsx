@@ -189,6 +189,7 @@ interface AppContextType {
   deleteFeedPost: (id: string) => Promise<boolean>;
 
   // Customer actions
+  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<boolean>;
   updateCustomer: (id: string, data: Partial<Customer>) => Promise<boolean>;
   deleteCustomer: (id: string) => Promise<boolean>;
 
@@ -1726,14 +1727,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // CUSTOMER CRUD
+  const addCustomer = async (customerData: Omit<Customer, 'id' | 'createdAt'>): Promise<boolean> => {
+    const newId = `cust-${Date.now()}`;
+    const newCustomer: Customer = {
+      ...customerData,
+      id: newId,
+      createdAt: new Date().toLocaleDateString('pt-BR'),
+      totalAppointments: Number(customerData.totalAppointments) || 0,
+      totalSpent: Number(customerData.totalSpent) || 0,
+      status: customerData.status || 'ativo',
+    };
+    setCustomers((prev) => [newCustomer, ...prev]);
+
+    try {
+      const cleanPayload = cleanFirestoreData(newCustomer);
+      await setDoc(doc(db, 'customers', newId), cleanPayload);
+      addAdminLog('Adicionar Cliente', `Cliente "${newCustomer.name}" cadastrado manualmente.`);
+    } catch (e) {
+      console.warn('Customer saved locally', e);
+    }
+
+    addToast('Cliente cadastrado com sucesso!', 'success');
+    return true;
+  };
+
   const updateCustomer = async (id: string, data: Partial<Customer>): Promise<boolean> => {
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
     try {
-      await updateDoc(doc(db, 'customers', id), data);
+      const cleanPayload = cleanFirestoreData(data);
+      await updateDoc(doc(db, 'customers', id), cleanPayload);
+      addAdminLog('Editar Cliente', `Dados do cliente "${data.name || id}" atualizados.`);
     } catch (e) {
       console.warn('Customer updated locally', e);
     }
-    addToast('Dados do cliente atualizados.', 'success');
+    addToast('Dados do cliente atualizados com sucesso.', 'success');
     return true;
   };
 
@@ -2443,6 +2470,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addFeedPost,
         updateFeedPost,
         deleteFeedPost,
+        addCustomer,
         updateCustomer,
         deleteCustomer,
         addInsumo,
