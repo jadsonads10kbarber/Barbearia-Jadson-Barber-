@@ -15,7 +15,8 @@ import {
   Camera,
   FolderOpen,
   Eye,
-  Check
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from '../../components/admin/AdminLayout';
@@ -111,12 +112,6 @@ export const AdminFeedPage: React.FC = () => {
   const handleImageFile = (file: File) => {
     if (!file) return;
 
-    // Check if it's an image file or has image extension
-    if (file.type && !file.type.startsWith('image/')) {
-      addToast('Por favor selecione um arquivo de imagem válido (JPG, PNG, WEBP).', 'error');
-      return;
-    }
-
     setIsProcessingImage(true);
     const fileName = file.name || 'foto_dispositivo.jpg';
     setImageFileName(fileName);
@@ -128,54 +123,56 @@ export const AdminFeedPage: React.FC = () => {
       if (rawDataUrl) {
         // Set preview immediately so the user sees the photo right away!
         setImage(rawDataUrl);
+        setIsProcessingImage(false);
+        addToast(`Foto "${fileName}" carregada com sucesso!`, 'success');
 
         // 2. High-performance canvas downscaling (max 800px, 82% JPEG) to keep data light (~40KB) & fast in Firestore
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            const MAX_SIZE = 800;
-            let w = img.naturalWidth || img.width || 800;
-            let h = img.naturalHeight || img.height || 600;
+        try {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              const MAX_SIZE = 800;
+              let w = img.naturalWidth || img.width || 800;
+              let h = img.naturalHeight || img.height || 600;
 
-            if (w > h) {
-              if (w > MAX_SIZE) {
-                h = Math.round((h * MAX_SIZE) / w);
-                w = MAX_SIZE;
+              if (w > h) {
+                if (w > MAX_SIZE) {
+                  h = Math.round((h * MAX_SIZE) / w);
+                  w = MAX_SIZE;
+                }
+              } else {
+                if (h > MAX_SIZE) {
+                  w = Math.round((w * MAX_SIZE) / h);
+                  h = MAX_SIZE;
+                }
               }
-            } else {
-              if (h > MAX_SIZE) {
-                w = Math.round((w * MAX_SIZE) / h);
-                h = MAX_SIZE;
+
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, w, h);
+                const compressed = canvas.toDataURL('image/jpeg', 0.82);
+                if (compressed && compressed.length > 50) {
+                  setImage(compressed);
+                }
               }
+            } catch (canvasErr) {
+              console.warn('Canvas optimization fallback to reader', canvasErr);
             }
+          };
 
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
-              ctx.drawImage(img, 0, 0, w, h);
-              const compressed = canvas.toDataURL('image/jpeg', 0.82);
-              setImage(compressed);
-              addToast(`Foto "${fileName}" carregada com sucesso!`, 'success');
-            }
-          } catch (canvasErr) {
-            console.warn('Canvas optimization fallback to reader', canvasErr);
-            addToast(`Foto "${fileName}" carregada com sucesso!`, 'success');
-          } finally {
-            setIsProcessingImage(false);
-          }
-        };
+          img.onerror = () => {
+            console.warn('Image decode error fallback, keeping raw data');
+          };
 
-        img.onerror = () => {
-          console.warn('Image decode error fallback, keeping raw data');
-          setIsProcessingImage(false);
-          addToast(`Foto "${fileName}" carregada!`, 'success');
-        };
-
-        img.src = rawDataUrl;
+          img.src = rawDataUrl;
+        } catch (canvasErr) {
+          console.warn('Canvas processing error', canvasErr);
+        }
       } else {
         setIsProcessingImage(false);
         addToast('Erro ao carregar os dados da foto.', 'error');
@@ -195,6 +192,8 @@ export const AdminFeedPage: React.FC = () => {
     if (file) {
       handleImageFile(file);
     }
+    // Clear value so user can pick the same file again if desired
+    e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent<HTMLElement>) => {
@@ -454,94 +453,205 @@ export const AdminFeedPage: React.FC = () => {
                 {/* Tab 1: Galeria / Arquivos do Dispositivo */}
                 {imageTab === 'upload' && (
                   <div className="space-y-3">
-                    <label
-                      htmlFor="admin-feed-file-input"
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={handleDrop}
-                      className="border-2 border-dashed border-[#DAA520]/60 hover:border-[#DAA520] bg-amber-950/10 hover:bg-amber-950/20 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-3 group block"
-                    >
-                      <input
-                        id="admin-feed-file-input"
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        onClick={(e) => {
-                          (e.currentTarget as HTMLInputElement).value = '';
-                        }}
-                        className="sr-only"
-                      />
-                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#DAA520]/20 group-hover:bg-[#DAA520]/30 flex items-center justify-center text-[#DAA520] transition-colors border border-[#DAA520]/30 shadow-inner">
-                        {isProcessingImage ? (
-                          <RefreshCw className="w-7 h-7 animate-spin text-[#DAA520]" />
-                        ) : (
-                          <UploadCloud className="w-7 h-7" />
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm font-bold text-white font-mono flex items-center justify-center gap-1.5">
-                          {isProcessingImage ? (
-                            'Processando foto selecionada...'
-                          ) : (
-                            <>
-                              <span>Escolher Foto da Galeria</span>
-                              <span className="text-[#DAA520]">→</span>
-                            </>
-                          )}
-                        </p>
-                        <p className="text-xs text-neutral-400 font-sans">
-                          Toque aqui para abrir as fotos do celular ou computador
-                        </p>
-                      </div>
+                    {image ? (
+                      <div className="border-2 border-emerald-500/60 bg-emerald-950/15 rounded-2xl p-4 text-center space-y-3">
+                        <div className="relative h-48 w-full rounded-xl overflow-hidden bg-black flex items-center justify-center border border-emerald-500/30">
+                          <img
+                            src={image}
+                            alt="Foto Selecionada da Galeria"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-black text-[11px] font-mono font-bold flex items-center gap-1 shadow-md">
+                              <Check className="w-3.5 h-3.5" />
+                              Foto Pronta!
+                            </span>
+                          </div>
+                        </div>
 
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 text-[#DAA520] text-xs font-mono font-bold border border-[#DAA520]/40 group-hover:bg-[#DAA520] group-hover:text-black transition-colors">
-                        <UploadCloud className="w-3.5 h-3.5" />
-                        <span>Abrir Galeria / Arquivos</span>
+                        <div className="flex items-center justify-between text-xs font-mono px-1">
+                          <span className="text-neutral-300 truncate max-w-[200px]">
+                            📁 {imageFileName || 'Foto da Galeria'}
+                          </span>
+                          <span className="text-emerald-400 font-bold">100% Anexada</span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleFileChange}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                              title="Trocar Foto"
+                            />
+                            <button
+                              type="button"
+                              className="w-full py-2 px-3 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span>Trocar por Outra Foto</span>
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImage('');
+                              setImageFileName('');
+                              setUrlInput('');
+                            }}
+                            className="py-2 px-3 rounded-xl bg-neutral-900 hover:bg-red-950 text-red-400 border border-red-500/30 font-mono font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remover</span>
+                          </button>
+                        </div>
                       </div>
-                    </label>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="relative border-2 border-dashed border-[#DAA520] hover:border-amber-400 bg-amber-950/20 hover:bg-amber-950/30 rounded-2xl p-6 text-center transition-all space-y-3 group block shadow-inner">
+                          {/* Native invisible file input covering entire box for instant click/touch handling */}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                            title="Toque aqui para escolher a foto"
+                          />
+
+                          <div className="w-16 h-16 mx-auto rounded-2xl bg-[#DAA520]/20 group-hover:bg-[#DAA520]/30 flex items-center justify-center text-[#DAA520] transition-colors border border-[#DAA520]/40 shadow-md">
+                            {isProcessingImage ? (
+                              <RefreshCw className="w-8 h-8 animate-spin text-[#DAA520]" />
+                            ) : (
+                              <UploadCloud className="w-8 h-8" />
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-base font-bold text-white font-mono flex items-center justify-center gap-2">
+                              {isProcessingImage ? (
+                                'Carregando foto selecionada...'
+                              ) : (
+                                <>
+                                  <span>Escolher Foto da Galeria</span>
+                                  <span className="text-[#DAA520]">→</span>
+                                </>
+                              )}
+                            </p>
+                            <p className="text-xs text-neutral-300 font-sans">
+                              Toque em qualquer lugar desta caixa para abrir as fotos do aparelho
+                            </p>
+                          </div>
+
+                          <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-md pointer-events-none">
+                            <UploadCloud className="w-4 h-4" />
+                            <span>Abrir Galeria do Aparelho</span>
+                          </div>
+                        </div>
+
+                        {/* Direct Native System Selector as Secondary Guaranteed Fallback */}
+                        <div className="p-3 bg-neutral-950 border border-neutral-800 rounded-xl space-y-1.5">
+                          <label className="block text-xs font-mono text-neutral-400 font-bold">
+                            Ou escolha diretamente pelo seletor do sistema:
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="block w-full text-xs text-neutral-400 file:mr-3 file:py-1.5 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-mono file:font-bold file:bg-[#DAA520] file:text-black hover:file:bg-amber-400 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* Tab 2: Câmera Direta */}
                 {imageTab === 'camera' && (
                   <div className="space-y-3">
-                    <label
-                      htmlFor="admin-feed-camera-input"
-                      className="border-2 border-dashed border-[#DAA520]/60 hover:border-[#DAA520] bg-amber-950/15 hover:bg-amber-950/25 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-3 group block"
-                    >
-                      <input
-                        id="admin-feed-camera-input"
-                        ref={cameraInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleFileChange}
-                        onClick={(e) => {
-                          (e.currentTarget as HTMLInputElement).value = '';
-                        }}
-                        className="sr-only"
-                      />
-                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#DAA520]/20 flex items-center justify-center text-[#DAA520] border border-[#DAA520]/30 shadow-inner">
-                        {isProcessingImage ? (
-                          <RefreshCw className="w-7 h-7 animate-spin text-[#DAA520]" />
-                        ) : (
-                          <Camera className="w-7 h-7" />
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm font-bold text-[#DAA520] font-mono">
-                          {isProcessingImage ? 'Processando foto capturada...' : 'Tirar Foto com a Câmera Agora'}
-                        </p>
-                        <p className="text-xs text-neutral-300 font-sans">
-                          Abre a câmera do celular para fotografar o corte na hora
-                        </p>
-                      </div>
+                    {image ? (
+                      <div className="border-2 border-emerald-500/60 bg-emerald-950/15 rounded-2xl p-4 text-center space-y-3">
+                        <div className="relative h-48 w-full rounded-xl overflow-hidden bg-black flex items-center justify-center border border-emerald-500/30">
+                          <img
+                            src={image}
+                            alt="Foto da Câmera"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-black text-[11px] font-mono font-bold flex items-center gap-1 shadow-md">
+                              <Check className="w-3.5 h-3.5" />
+                              Foto Pronta!
+                            </span>
+                          </div>
+                        </div>
 
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 text-[#DAA520] text-xs font-mono font-bold border border-[#DAA520]/40 group-hover:bg-[#DAA520] group-hover:text-black transition-colors">
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Abrir Câmera</span>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={handleFileChange}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                              title="Tirar Outra Foto"
+                            />
+                            <button
+                              type="button"
+                              className="w-full py-2 px-3 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-mono font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>Tirar Outra Foto</span>
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImage('');
+                              setImageFileName('');
+                              setUrlInput('');
+                            }}
+                            className="py-2 px-3 rounded-xl bg-neutral-900 hover:bg-red-950 text-red-400 border border-red-500/30 font-mono font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remover</span>
+                          </button>
+                        </div>
                       </div>
-                    </label>
+                    ) : (
+                      <div className="relative border-2 border-dashed border-[#DAA520] hover:border-amber-400 bg-amber-950/20 hover:bg-amber-950/30 rounded-2xl p-6 text-center transition-all space-y-3 group block shadow-inner">
+                        {/* Native invisible camera input covering entire box */}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                          title="Toque aqui para abrir a câmera"
+                        />
+
+                        <div className="w-16 h-16 mx-auto rounded-2xl bg-[#DAA520]/20 flex items-center justify-center text-[#DAA520] border border-[#DAA520]/40 shadow-md">
+                          {isProcessingImage ? (
+                            <RefreshCw className="w-8 h-8 animate-spin text-[#DAA520]" />
+                          ) : (
+                            <Camera className="w-8 h-8" />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-base font-bold text-[#DAA520] font-mono">
+                            {isProcessingImage ? 'Processando foto capturada...' : 'Tirar Foto com a Câmera Agora'}
+                          </p>
+                          <p className="text-xs text-neutral-300 font-sans">
+                            Toque em qualquer lugar desta caixa para abrir a câmera do celular
+                          </p>
+                        </div>
+
+                        <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-md pointer-events-none">
+                          <Camera className="w-4 h-4" />
+                          <span>Abrir Câmera do Celular</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -567,69 +677,63 @@ export const AdminFeedPage: React.FC = () => {
 
                 {/* Tab 4: Barber Presets */}
                 {imageTab === 'presets' && (
-                  <div className="grid grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1 bg-neutral-950 rounded-xl border border-neutral-800">
-                    {BARBER_PHOTO_PRESETS.map((preset, idx) => (
-                      <button
-                        type="button"
-                        key={idx}
-                        onClick={() => handleSelectPreset(preset.url, preset.category)}
-                        className={`relative rounded-lg overflow-hidden border transition-all text-left group cursor-pointer ${
-                          image === preset.url ? 'border-[#DAA520] ring-2 ring-[#DAA520]/40' : 'border-neutral-800 hover:border-neutral-600'
-                        }`}
-                      >
-                        <img src={preset.url} alt={preset.title} className="w-full h-16 object-cover group-hover:scale-105 transition-transform" />
-                        <div className="p-1 bg-black/90">
-                          <p className="text-[9px] font-mono text-neutral-300 truncate">{preset.title}</p>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="space-y-2">
+                    <p className="text-xs text-neutral-400 font-mono">
+                      Toque em qualquer modelo para usar na publicação:
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1.5 bg-neutral-950 rounded-xl border border-neutral-800">
+                      {BARBER_PHOTO_PRESETS.map((preset, idx) => (
+                        <button
+                          type="button"
+                          key={idx}
+                          onClick={() => handleSelectPreset(preset.url, preset.category)}
+                          className={`relative rounded-lg overflow-hidden border transition-all text-left group cursor-pointer ${
+                            image === preset.url ? 'border-emerald-500 ring-2 ring-emerald-500/60 scale-[0.98]' : 'border-neutral-800 hover:border-[#DAA520]'
+                          }`}
+                        >
+                          <img src={preset.url} alt={preset.title} className="w-full h-16 object-cover group-hover:scale-105 transition-transform" />
+                          {image === preset.url && (
+                            <div className="absolute top-1 right-1 bg-emerald-500 text-black rounded-full p-0.5 shadow">
+                              <Check className="w-3 h-3" />
+                            </div>
+                          )}
+                          <div className="p-1 bg-black/90">
+                            <p className="text-[9px] font-mono text-neutral-300 truncate">{preset.title}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* Active Image Preview Box */}
-                {image && (
-                  <div className="relative rounded-2xl overflow-hidden border border-emerald-500/40 bg-neutral-950 p-2.5 space-y-2 mt-2 shadow-lg">
-                    <div className="relative h-48 w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
-                      <img
-                        src={image}
-                        alt="Preview da Foto Carregada"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&auto=format&fit=crop&q=80';
-                        }}
-                      />
-                      <div className="absolute top-2 right-2 flex gap-1.5">
-                        <label
-                          htmlFor="admin-feed-file-input"
-                          className="px-2.5 py-1 rounded-lg bg-black/80 hover:bg-black text-[#DAA520] text-xs font-mono font-bold flex items-center gap-1 border border-amber-500/40 transition-colors shadow-lg cursor-pointer"
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Trocar</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setImage('');
-                            setImageFileName('');
-                            setUrlInput('');
-                          }}
-                          className="p-1 rounded-lg bg-black/80 hover:bg-red-950 text-red-400 text-xs font-mono font-bold border border-red-500/30 transition-colors cursor-pointer"
-                          title="Remover Foto"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                {/* Global Active Image Status Bar */}
+                {image ? (
+                  <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between text-xs font-mono">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg overflow-hidden border border-emerald-500/50">
+                        <img src={image} alt="Thumb" className="w-full h-full object-cover" />
                       </div>
-                    </div>
-
-                    <div className="px-1 text-[11px] font-mono flex items-center justify-between">
-                      <span className="text-neutral-300 truncate max-w-[240px]">
-                        {imageFileName || 'Foto Pronta para Salvar'}
-                      </span>
-                      <span className="text-emerald-400 font-bold flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" />
-                        Pronta para o Feed
+                      <span className="text-emerald-300 font-bold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        Foto Anexada: {imageFileName || 'Imagem Selecionada'}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImage('');
+                        setImageFileName('');
+                        setUrlInput('');
+                      }}
+                      className="text-red-400 hover:text-red-300 text-[11px] underline cursor-pointer"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-500/30 flex items-center gap-2 text-xs font-mono text-amber-300">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Nenhuma foto anexada ainda. Escolha uma foto na Galeria ou Modelos acima.</span>
                   </div>
                 )}
               </div>
