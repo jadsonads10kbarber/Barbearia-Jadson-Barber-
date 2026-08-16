@@ -116,7 +116,14 @@ export const Sidebar: React.FC = () => {
               )}
               <div className="min-w-0">
                 <span className="text-xs font-bold text-white block truncate">{currentUser.name}</span>
-                <span className="text-[10px] text-amber-400 font-mono block">Cliente VIP JADSON BARBER</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] text-amber-400 font-mono">VIP</span>
+                  {currentUser.accessCode && (
+                    <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                      Código: {currentUser.accessCode}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

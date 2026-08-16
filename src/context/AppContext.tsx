@@ -121,6 +121,8 @@ interface AppContextType {
   isLoggedIn: boolean;
   currentUser: UserAccount | null;
   registeredUsers: UserAccount[];
+  celebrationAccessCode: string | null;
+  setCelebrationAccessCode: (code: string | null) => void;
   login: (identifier: string, password?: string) => Promise<boolean>;
   registerUser: (
     name: string,
@@ -460,6 +462,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const isLoggedIn = Boolean(currentUser);
+  const [celebrationAccessCode, setCelebrationAccessCode] = useState<string | null>(null);
 
   // Logged in Admin User
   const [adminUser, setAdminUser] = useState<UserAccount | null>(() => {
@@ -1307,14 +1310,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error('Identificador obrigatório.');
     }
 
-    const cleanRawUpper = raw.toUpperCase().replace(/\s+/g, '');
-    const cleanRawLower = raw.toLowerCase().replace(/\s+/g, '');
+    const cleanRawUpper = raw.toUpperCase().replace(/[\s\-_.]+/g, '');
+    const cleanRawLower = raw.toLowerCase().replace(/[\s\-_.]+/g, '');
     const cleanDigits = raw.replace(/\D/g, '');
     const isEmail = raw.includes('@');
 
     // 1. Search in registeredUsers
     let matchedUser = registeredUsers.find((u) => {
-      const uCode = (u.accessCode || '').trim().toUpperCase();
+      const uCode = (u.accessCode || '').trim().toUpperCase().replace(/[\s\-_.]+/g, '');
       const uEmail = (u.email || '').trim().toLowerCase();
       const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
 
@@ -1340,7 +1343,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 2. If not found in registeredUsers, search in customers collection
     if (!matchedUser) {
       const matchedCustomer = customers.find((c) => {
-        const cCode = (c.accessCode || '').trim().toUpperCase();
+        const cCode = (c.accessCode || '').trim().toUpperCase().replace(/[\s\-_.]+/g, '');
         const cEmail = (c.email || '').trim().toLowerCase();
         const cPhoneDigits = (c.phone || '').replace(/\D/g, '');
 
@@ -1367,7 +1370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: matchedCustomer.name,
           email: matchedCustomer.email || (isEmail ? raw : 'cliente@jadsonbarber.com.br'),
           phone: matchedCustomer.phone || (!isEmail ? raw : '(11) 98765-4321'),
-          accessCode: assignedCode,
+          accessCode: assignedCode.toUpperCase(),
           password: matchedCustomer.password,
           avatar: matchedCustomer.avatar || matchedCustomer.photo,
           createdAt: matchedCustomer.createdAt || new Date().toISOString(),
@@ -1376,15 +1379,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 3. If no matching account is found
+    // 3. Direct Firestore Fallback Query if state was not loaded yet
+    if (!matchedUser) {
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const d of usersSnap.docs) {
+          const u = d.data() as UserAccount;
+          const uCode = (u.accessCode || '').trim().toUpperCase().replace(/[\s\-_.]+/g, '');
+          const uEmail = (u.email || '').trim().toLowerCase();
+          const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
+
+          if (
+            (uCode && (uCode === cleanRawUpper || uCode === cleanRawUpper.replace(/[^A-Z0-9]/g, ''))) ||
+            (isEmail && uEmail === cleanRawLower) ||
+            (!isEmail && cleanDigits && uPhoneDigits && (cleanDigits === uPhoneDigits || uPhoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(uPhoneDigits)))
+          ) {
+            matchedUser = { ...u, id: d.id };
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn('Direct users lookup notice:', e);
+      }
+    }
+
+    // 4. If no matching account is found
     if (!matchedUser) {
       const errorMsg = 'Nenhum cadastro encontrado com este Código, WhatsApp ou E-mail. Por favor, cadastre-se primeiro!';
       addToast(errorMsg, 'error');
       throw new Error(errorMsg);
     }
 
-    // 4. Verify password if account has a password
-    if (matchedUser.password && password) {
+    // 5. Verify password if account has a password
+    if (matchedUser.password && matchedUser.password.trim() !== '') {
+      if (!password || password.trim() === '') {
+        const errorMsg = 'Por favor, digite sua senha cadastrada.';
+        addToast(errorMsg, 'error');
+        throw new Error(errorMsg);
+      }
       if (matchedUser.password.trim() !== password.trim()) {
         const errorMsg = 'Senha incorreta. Verifique sua senha ou utilize a recuperação de senha.';
         addToast(errorMsg, 'error');
@@ -1392,9 +1424,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // Ensure access code exists on profile
+    // Ensure access code exists on profile and uppercase
     if (!matchedUser.accessCode) {
-      const newCode = generateUniqueClientAccessCode(registeredUsers, customers);
+      const newCode = generateUniqueClientAccessCode(registeredUsers, customers).toUpperCase();
       matchedUser.accessCode = newCode;
       try {
         await updateDoc(doc(db, 'users', matchedUser.id), { accessCode: newCode });
@@ -1411,7 +1443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(matchedUser));
     } catch (e) {}
 
-    addToast(`Bem-vindo, ${matchedUser.name}! Login realizado com sucesso.`, 'success');
+    addToast(`Bem-vindo(a), ${matchedUser.name}! Login realizado com sucesso.`, 'success');
     return true;
   };
 
@@ -1487,7 +1519,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 3. GENERATE UNIQUE 3-DIGIT + 1-LETTER ACCESS CODE (e.g. 123A, 749X)
-    const accessCode = generateUniqueClientAccessCode(registeredUsers, customers);
+    const accessCode = generateUniqueClientAccessCode(registeredUsers, customers).toUpperCase();
 
     const newId = `usr-${Date.now()}`;
     const newUser: UserAccount = {
@@ -1506,6 +1538,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(newUser);
     setCustomerNameState(newUser.name);
     setCustomerPhoneState(newUser.phone);
+    setCelebrationAccessCode(accessCode);
+
     try {
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newUser));
     } catch (e) {}
@@ -3117,6 +3151,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoggedIn,
         currentUser,
         registeredUsers,
+        celebrationAccessCode,
+        setCelebrationAccessCode,
         login,
         registerUser,
         logout,

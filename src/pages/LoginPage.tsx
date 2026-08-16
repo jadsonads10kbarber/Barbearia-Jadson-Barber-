@@ -508,9 +508,26 @@ export const LoginPage: React.FC = () => {
 
       </div>
 
-      {/* Security Footer Note */}
-      <div className="text-center text-[11px] text-neutral-500 font-mono">
+      {/* Security Footer Note & Admin Direct Link */}
+      <div className="text-center space-y-2 text-[11px] text-neutral-500 font-mono">
         <p>Barbearia Jadson Barber • Ambiente Seguro & Exclusivo</p>
+        <div>
+          <button
+            id="btn-admin-direct-link"
+            type="button"
+            onClick={() => {
+              if (isAdminLoggedIn) {
+                setActivePage('admin-dashboard');
+              } else {
+                setActivePage('admin-login');
+              }
+            }}
+            className="text-[11px] font-mono text-neutral-400 hover:text-[#DAA520] transition-colors inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-neutral-900 border border-neutral-800/80 hover:border-amber-500/30 cursor-pointer"
+          >
+            <Scissors className="w-3.5 h-3.5 text-[#DAA520]" />
+            <span>Área da Barbearia (Painel Administrativo)</span>
+          </button>
+        </div>
       </div>
 
       {/* CELEBRATION MODAL: POST-REGISTRATION UNIQUE CODE */}

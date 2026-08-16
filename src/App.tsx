@@ -7,6 +7,7 @@ import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { ClientReviewModal } from './components/ClientReviewModal';
+import { AccessCodeModal } from './components/AccessCodeModal';
 
 import { AgendamentoPage } from './pages/AgendamentoPage';
 import { MeusAgendamentosPage } from './pages/MeusAgendamentosPage';
@@ -79,6 +80,7 @@ const AppContent: React.FC = () => {
         <main className="flex-1 max-w-md w-full mx-auto px-4">
           <LoginPage />
         </main>
+        <AccessCodeModal />
         <ToastContainer />
         <PwaInstallPrompt />
       </div>
@@ -109,6 +111,9 @@ const AppContent: React.FC = () => {
 
       {/* Fixed Bottom Navigation (Mobile) */}
       <BottomNav />
+
+      {/* Unique Access Code Celebration Modal */}
+      <AccessCodeModal />
 
       {/* Toast Notifications Overlay */}
       <ToastContainer />
