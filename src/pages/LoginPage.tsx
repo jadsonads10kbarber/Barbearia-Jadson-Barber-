@@ -20,6 +20,7 @@ import {
   QrCode,
   AlertCircle,
   HelpCircle,
+  MessageCircle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -252,7 +253,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div id="client-login-page" className="pb-24 pt-6 px-4 max-w-md mx-auto space-y-6 animate-fadeIn">
+    <div id="client-login-page" className="pb-20 pt-6 px-4 max-w-sm mx-auto space-y-6 animate-fadeIn">
       
       {/* Brand Header */}
       <div className="text-center space-y-2 pt-2">
@@ -260,36 +261,35 @@ export const LoginPage: React.FC = () => {
           id="btn-scissors-secret-tap"
           type="button"
           onClick={handleScissorsTap}
-          title="Acesso Administrativo Secreto (5 toques)"
-          className={`w-14 h-14 rounded-2xl bg-[#DAA520] text-black font-extrabold flex items-center justify-center mx-auto shadow-xl shadow-[#DAA520]/20 border border-[#DAA520]/40 transition-all cursor-pointer ${
-            tapCount > 0 ? 'scale-110 ring-2 ring-amber-300 animate-pulse' : ''
-          }`}
+          className="w-14 h-14 rounded-2xl bg-[#DAA520] text-black font-extrabold flex items-center justify-center mx-auto shadow-lg shadow-[#DAA520]/20 border border-[#DAA520]/40 transition-transform active:scale-95 cursor-pointer"
         >
-          <Scissors className={`w-7 h-7 stroke-[2.2] transition-transform ${tapCount > 0 ? 'rotate-45' : ''}`} />
+          <Scissors className="w-7 h-7 stroke-[2.2]" />
         </button>
 
-        <h1 className="text-2xl font-black font-mono tracking-tight flex items-center justify-center gap-1.5">
-          <span className="text-[#DAA520]">JADSON</span>
-          <span className="text-white">BARBER</span>
-        </h1>
-        <p className="text-xs text-neutral-400 font-sans max-w-xs mx-auto">
-          Faça login ou cadastre-se para agendar seus serviços exclusivos
-        </p>
+        <div>
+          <h1 className="text-2xl font-black font-mono tracking-tight flex items-center justify-center gap-1.5">
+            <span className="text-[#DAA520]">JADSON</span>
+            <span className="text-white">BARBER</span>
+          </h1>
+          <p className="text-xs text-neutral-400 font-sans mt-0.5">
+            Agendamentos e serviços exclusivos
+          </p>
+        </div>
       </div>
 
       {/* Mode Switcher Tabs */}
-      <div className="bg-[#111111] p-1 rounded-2xl border border-white/10 flex gap-1">
+      <div className="bg-[#141414] p-1 rounded-xl border border-white/10 flex gap-1">
         <button
           id="tab-mode-login"
           type="button"
           onClick={() => setMode('login')}
-          className={`flex-1 py-2.5 px-3 rounded-xl font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 py-2 px-3 rounded-lg font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
             mode === 'login'
-              ? 'bg-[#DAA520] text-black shadow-md shadow-[#DAA520]/20'
+              ? 'bg-[#DAA520] text-black shadow-md'
               : 'text-neutral-400 hover:text-white'
           }`}
         >
-          <LogIn className="w-4 h-4" />
+          <LogIn className="w-3.5 h-3.5" />
           <span>Entrar</span>
         </button>
 
@@ -297,53 +297,51 @@ export const LoginPage: React.FC = () => {
           id="tab-mode-register"
           type="button"
           onClick={() => setMode('register')}
-          className={`flex-1 py-2.5 px-3 rounded-xl font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 py-2 px-3 rounded-lg font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
             mode === 'register'
-              ? 'bg-[#DAA520] text-black shadow-md shadow-[#DAA520]/20'
+              ? 'bg-[#DAA520] text-black shadow-md'
               : 'text-neutral-400 hover:text-white'
           }`}
         >
-          <UserPlus className="w-4 h-4" />
-          <span>Cadastrar-se</span>
+          <UserPlus className="w-3.5 h-3.5" />
+          <span>Cadastrar</span>
         </button>
       </div>
 
       {/* Form Card */}
-      <div className="bg-[#111111] border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4">
+      <div className="bg-[#141414] border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4">
         
         {/* LOGIN FORM */}
         {mode === 'login' && (
           <form id="form-client-login" onSubmit={handleLoginSubmit} className="space-y-4">
+            
             <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5 text-[#DAA520]" />
-                Código de Acesso, WhatsApp ou E-mail
+              <label className="text-xs font-bold text-neutral-300 font-sans flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
+                <span>WhatsApp, Código ou E-mail</span>
               </label>
+
               <input
                 id="input-login-identifier"
                 type="text"
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
-                placeholder="Ex: 123A (ou 123a), (11) 99999-8888 ou seu e-mail"
-                className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
+                placeholder="Seu WhatsApp, Código ou E-mail"
+                className="w-full bg-black/70 border border-white/10 rounded-xl px-3.5 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#DAA520] transition-colors"
                 required
               />
-              <div className="flex items-center gap-1 text-[11px] text-neutral-400 font-sans pt-0.5">
-                <Sparkles className="w-3 h-3 text-[#DAA520] shrink-0" />
-                <span>O código (3 dígitos e 1 letra) aceita maiúsculas ou minúsculas.</span>
-              </div>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
+                <label className="text-xs font-bold text-neutral-300 font-sans flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-[#DAA520]" />
-                  Senha
+                  <span>Senha</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="text-[11px] text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   <span>{showPassword ? 'Ocultar' : 'Mostrar'}</span>
@@ -354,8 +352,8 @@ export const LoginPage: React.FC = () => {
                 type={showPassword ? 'text' : 'password'}
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Sua senha cadastrada"
-                className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
+                placeholder="Sua senha"
+                className="w-full bg-black/70 border border-white/10 rounded-xl px-3.5 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#DAA520] transition-colors"
               />
             </div>
 
@@ -363,19 +361,19 @@ export const LoginPage: React.FC = () => {
               id="btn-login-submit"
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+              className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
             >
               <LogIn className="w-4 h-4" />
-              <span>{isLoading ? 'Entrando...' : 'Acessar Conta'}</span>
+              <span>{isLoading ? 'Entrando...' : 'Entrar'}</span>
             </button>
 
             {/* ESQUECI MINHA SENHA */}
-            <div className="pt-2 text-center">
+            <div className="pt-1 text-center">
               <button
                 id="btn-forgot-password-modal"
                 type="button"
                 onClick={handleOpenForgotModal}
-                className="text-xs font-mono font-medium text-neutral-400 hover:text-[#DAA520] transition-colors inline-flex items-center gap-1.5 cursor-pointer py-1 px-2.5 rounded-lg hover:bg-neutral-900/60 border border-transparent hover:border-neutral-800"
+                className="text-xs font-mono text-neutral-400 hover:text-[#DAA520] transition-colors inline-flex items-center gap-1.5 cursor-pointer py-1 px-2.5 rounded-lg"
               >
                 <KeyRound className="w-3.5 h-3.5 text-[#DAA520]" />
                 <span>Esqueci minha senha</span>
@@ -387,20 +385,9 @@ export const LoginPage: React.FC = () => {
         {/* REGISTER FORM */}
         {mode === 'register' && (
           <form id="form-client-register" onSubmit={handleRegisterSubmit} className="space-y-3.5">
-            
-            {/* Uniqueness Info Banner */}
-            <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200/90 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-amber-300">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Cadastro Único & Código Exclusivo</span>
-              </div>
-              <p className="text-[11px] leading-relaxed text-neutral-300">
-                Cada telefone e e-mail só pode ser cadastrado uma única vez. Ao concluir, você receberá um <strong>Código de Acesso de 3 dígitos e 1 letra</strong> (ex: 123A).
-              </p>
-            </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
+              <label className="text-xs font-bold text-neutral-300 font-sans flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-[#DAA520]" />
                 Nome Completo
               </label>
@@ -410,18 +397,15 @@ export const LoginPage: React.FC = () => {
                 value={registerName}
                 onChange={(e) => setRegisterName(e.target.value)}
                 placeholder="Ex: Carlos Silva"
-                className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
+                className="w-full bg-black/70 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#DAA520] transition-colors"
                 required
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
-                  Telefone / WhatsApp
-                </span>
-                <span className="text-[10px] text-amber-400 font-mono">Sem duplicação</span>
+              <label className="text-xs font-bold text-neutral-300 font-sans flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
+                WhatsApp
               </label>
               <input
                 id="input-register-phone"
@@ -429,18 +413,15 @@ export const LoginPage: React.FC = () => {
                 value={registerPhone}
                 onChange={(e) => setRegisterPhone(e.target.value)}
                 placeholder="(11) 99999-8888"
-                className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
+                className="w-full bg-black/70 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#DAA520] transition-colors"
                 required
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-[#DAA520]" />
-                  E-mail
-                </span>
-                <span className="text-[10px] text-amber-400 font-mono">Sem duplicação</span>
+              <label className="text-xs font-bold text-neutral-300 font-sans flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-[#DAA520]" />
+                E-mail
               </label>
               <input
                 id="input-register-email"
@@ -448,7 +429,7 @@ export const LoginPage: React.FC = () => {
                 value={registerEmail}
                 onChange={(e) => setRegisterEmail(e.target.value)}
                 placeholder="seuemail@exemplo.com"
-                className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
+                className="w-full bg-black/70 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#DAA520] transition-colors"
                 required
               />
             </div>
@@ -456,14 +437,14 @@ export const LoginPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1">
+                  <label className="text-[11px] font-bold text-neutral-300 font-sans flex items-center gap-1">
                     <Lock className="w-3 h-3 text-[#DAA520]" />
                     Senha
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowRegisterPassword((p) => !p)}
-                    className="text-[10px] text-neutral-400 hover:text-white"
+                    className="text-[10px] text-neutral-500 hover:text-neutral-300"
                   >
                     {showRegisterPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                   </button>
@@ -474,12 +455,12 @@ export const LoginPage: React.FC = () => {
                   value={registerPassword}
                   onChange={(e) => setRegisterPassword(e.target.value)}
                   placeholder="******"
-                  className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                  className="w-full bg-black/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#DAA520]"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1">
+                <label className="text-[11px] font-bold text-neutral-300 font-sans flex items-center gap-1">
                   <KeyRound className="w-3 h-3 text-[#DAA520]" />
                   Confirmar
                 </label>
@@ -489,7 +470,7 @@ export const LoginPage: React.FC = () => {
                   value={registerConfirmPassword}
                   onChange={(e) => setRegisterConfirmPassword(e.target.value)}
                   placeholder="******"
-                  className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#DAA520]"
+                  className="w-full bg-black/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#DAA520]"
                 />
               </div>
             </div>
@@ -498,36 +479,19 @@ export const LoginPage: React.FC = () => {
               id="btn-register-submit"
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 pt-3"
+              className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
             >
               <UserPlus className="w-4 h-4" />
-              <span>{isLoading ? 'Cadastrando...' : 'Criar Minha Conta & Gerar Código'}</span>
+              <span>{isLoading ? 'Cadastrando...' : 'Criar Conta'}</span>
             </button>
           </form>
         )}
 
       </div>
 
-      {/* Security Footer Note & Admin Direct Link */}
-      <div className="text-center space-y-2 text-[11px] text-neutral-500 font-mono">
-        <p>Barbearia Jadson Barber • Ambiente Seguro & Exclusivo</p>
-        <div>
-          <button
-            id="btn-admin-direct-link"
-            type="button"
-            onClick={() => {
-              if (isAdminLoggedIn) {
-                setActivePage('admin-dashboard');
-              } else {
-                setActivePage('admin-login');
-              }
-            }}
-            className="text-[11px] font-mono text-neutral-400 hover:text-[#DAA520] transition-colors inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-neutral-900 border border-neutral-800/80 hover:border-amber-500/30 cursor-pointer"
-          >
-            <Scissors className="w-3.5 h-3.5 text-[#DAA520]" />
-            <span>Área da Barbearia (Painel Administrativo)</span>
-          </button>
-        </div>
+      {/* Clean Footer Note */}
+      <div className="text-center text-[11px] text-neutral-600 font-mono">
+        <p>Barbearia Jadson Barber • Ambiente Seguro</p>
       </div>
 
       {/* CELEBRATION MODAL: POST-REGISTRATION UNIQUE CODE */}

@@ -1302,11 +1302,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // CLIENT AUTH WITH UNIQUE ACCESS CODE, PHONE & EMAIL VALIDATION
+  // CLIENT AUTH WITH WHATSAPP (PREFERRED), ACCESS CODE, EMAIL & PASSWORD VALIDATION
   const login = async (identifier: string, password?: string): Promise<boolean> => {
     const raw = (identifier || '').trim();
     if (!raw) {
-      addToast('Por favor, informe seu Código de Acesso, WhatsApp ou E-mail.', 'error');
+      addToast('Por favor, informe seu WhatsApp, Código de Acesso ou E-mail.', 'error');
       throw new Error('Identificador obrigatório.');
     }
 
@@ -1315,26 +1315,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanDigits = raw.replace(/\D/g, '');
     const isEmail = raw.includes('@');
 
-    // 1. Search in registeredUsers
+    const normalizePhoneDigits = (phoneStr: string) => {
+      let d = (phoneStr || '').replace(/\D/g, '');
+      if (d.startsWith('55') && d.length >= 12) {
+        d = d.slice(2);
+      }
+      return d;
+    };
+
+    const normInputDigits = normalizePhoneDigits(raw);
+
+    const matchesPhone = (targetPhone: string) => {
+      if (!cleanDigits || cleanDigits.length < 8) return false;
+      const targetDigits = (targetPhone || '').replace(/\D/g, '');
+      const normTarget = normalizePhoneDigits(targetPhone);
+
+      if (!targetDigits) return false;
+      if (cleanDigits === targetDigits) return true;
+      if (normInputDigits && normTarget && (normInputDigits === normTarget || normTarget.endsWith(normInputDigits) || normInputDigits.endsWith(normTarget))) {
+        return true;
+      }
+      if (cleanDigits.length >= 8 && targetDigits.endsWith(cleanDigits)) return true;
+      if (targetDigits.length >= 8 && cleanDigits.endsWith(targetDigits)) return true;
+      return false;
+    };
+
+    // 1. Search in registeredUsers (WhatsApp preferred, then Access Code, then Email)
     let matchedUser = registeredUsers.find((u) => {
       const uCode = (u.accessCode || '').trim().toUpperCase().replace(/[\s\-_.]+/g, '');
       const uEmail = (u.email || '').trim().toLowerCase();
-      const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
 
-      // Match A: Access Code (case-insensitive, e.g. 123a or 123A)
+      // Priority A: Phone / WhatsApp
+      if (!isEmail && matchesPhone(u.phone || '')) {
+        return true;
+      }
+      // Priority B: Access Code (case-insensitive, e.g. 123a or 123A)
       if (uCode && (uCode === cleanRawUpper || uCode === cleanRawUpper.replace(/[^A-Z0-9]/g, ''))) {
         return true;
       }
-      // Match B: Email (case-insensitive)
+      // Priority C: Email (case-insensitive)
       if (isEmail && uEmail === cleanRawLower) {
-        return true;
-      }
-      // Match C: Phone / WhatsApp digits
-      if (!isEmail && cleanDigits && uPhoneDigits && (
-        cleanDigits === uPhoneDigits ||
-        (cleanDigits.length >= 8 && uPhoneDigits.endsWith(cleanDigits)) ||
-        (uPhoneDigits.length >= 8 && cleanDigits.endsWith(uPhoneDigits))
-      )) {
         return true;
       }
       return false;
@@ -1345,19 +1365,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const matchedCustomer = customers.find((c) => {
         const cCode = (c.accessCode || '').trim().toUpperCase().replace(/[\s\-_.]+/g, '');
         const cEmail = (c.email || '').trim().toLowerCase();
-        const cPhoneDigits = (c.phone || '').replace(/\D/g, '');
 
+        if (!isEmail && matchesPhone(c.phone || '')) {
+          return true;
+        }
         if (cCode && (cCode === cleanRawUpper || cCode === cleanRawUpper.replace(/[^A-Z0-9]/g, ''))) {
           return true;
         }
         if (isEmail && cEmail === cleanRawLower) {
-          return true;
-        }
-        if (!isEmail && cleanDigits && cPhoneDigits && (
-          cleanDigits === cPhoneDigits ||
-          (cleanDigits.length >= 8 && cPhoneDigits.endsWith(cleanDigits)) ||
-          (cPhoneDigits.length >= 8 && cleanDigits.endsWith(cPhoneDigits))
-        )) {
           return true;
         }
         return false;
@@ -1387,12 +1402,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const u = d.data() as UserAccount;
           const uCode = (u.accessCode || '').trim().toUpperCase().replace(/[\s\-_.]+/g, '');
           const uEmail = (u.email || '').trim().toLowerCase();
-          const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
 
           if (
+            (!isEmail && matchesPhone(u.phone || '')) ||
             (uCode && (uCode === cleanRawUpper || uCode === cleanRawUpper.replace(/[^A-Z0-9]/g, ''))) ||
-            (isEmail && uEmail === cleanRawLower) ||
-            (!isEmail && cleanDigits && uPhoneDigits && (cleanDigits === uPhoneDigits || uPhoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(uPhoneDigits)))
+            (isEmail && uEmail === cleanRawLower)
           ) {
             matchedUser = { ...u, id: d.id };
             break;
@@ -1405,7 +1419,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 4. If no matching account is found
     if (!matchedUser) {
-      const errorMsg = 'Nenhum cadastro encontrado com este Código, WhatsApp ou E-mail. Por favor, cadastre-se primeiro!';
+      const errorMsg = 'Nenhum cadastro encontrado com este WhatsApp, Código ou E-mail. Por favor, cadastre-se primeiro!';
       addToast(errorMsg, 'error');
       throw new Error(errorMsg);
     }
