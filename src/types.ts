@@ -124,6 +124,8 @@ export interface UserAccount {
   name: string;
   email: string;
   phone: string;
+  accessCode?: string; // 3 digits + 1 letter, e.g. "123A"
+  password?: string;
   avatar?: string;
   createdAt: string;
   role?: 'client' | 'admin';
@@ -134,6 +136,8 @@ export interface Customer {
   name: string;
   email: string;
   phone: string;
+  accessCode?: string; // 3 digits + 1 letter, e.g. "123A"
+  password?: string;
   avatar?: string;
   photo?: string;
   createdAt: string;

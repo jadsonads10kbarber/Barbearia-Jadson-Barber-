@@ -14,8 +14,12 @@ import {
   CheckCircle2,
   ShieldCheck,
   X,
-  MessageSquare,
   ArrowRight,
+  Copy,
+  Check,
+  QrCode,
+  AlertCircle,
+  HelpCircle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -35,7 +39,7 @@ export const LoginPage: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
 
   // Login form state
-  const [loginEmailOrPhone, setLoginEmailOrPhone] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -45,6 +49,11 @@ export const LoginPage: React.FC = () => {
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+
+  // Post-Registration Success Modal with 3-digit + 1-letter code
+  const [newlyCreatedCode, setNewlyCreatedCode] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   // Password Reset Modal state
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
@@ -59,19 +68,19 @@ export const LoginPage: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // 5 Taps gesture state
+  // 5 Taps gesture state on scissors for Admin Access
   const [tapCount, setTapCount] = useState<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check if identifier has a generated temporary code
   useEffect(() => {
-    if (loginEmailOrPhone.trim().length >= 4 && mode === 'login') {
-      const active = getActivePasswordReset(loginEmailOrPhone);
+    if (loginIdentifier.trim().length >= 3 && mode === 'login') {
+      const active = getActivePasswordReset(loginIdentifier);
       if (active && active.status === 'temp_code_generated') {
-        setResetIdentifier(loginEmailOrPhone);
+        setResetIdentifier(loginIdentifier);
       }
     }
-  }, [loginEmailOrPhone, mode, passwordResetRequests]);
+  }, [loginIdentifier, mode, passwordResetRequests]);
 
   const handleScissorsTap = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -97,27 +106,28 @@ export const LoginPage: React.FC = () => {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmailOrPhone.trim()) {
-      addToast('Por favor, informe seu e-mail ou telefone.', 'error');
+    const cleanId = loginIdentifier.trim();
+    if (!cleanId) {
+      addToast('Por favor, informe seu Código de Acesso, WhatsApp ou E-mail.', 'error');
       return;
     }
 
     // Check if there is an active temporary code waiting for this user
-    const activeReq = getActivePasswordReset(loginEmailOrPhone);
+    const activeReq = getActivePasswordReset(cleanId);
     if (activeReq && activeReq.status === 'temp_code_generated' && !loginPassword) {
-      setResetIdentifier(loginEmailOrPhone);
+      setResetIdentifier(cleanId);
       setForgotStep('complete');
       setIsForgotModalOpen(true);
-      addToast('Identificamos uma senha temporária gerada. Insira o código de 6 dígitos.', 'info');
+      addToast('Identificamos uma redefinição ativa. Insira o código recebido no WhatsApp.', 'info');
       return;
     }
 
     setIsLoading(true);
     try {
-      await login(loginEmailOrPhone, loginPassword);
+      await login(cleanId, loginPassword);
       setActivePage('agenda');
-    } catch (err) {
-      addToast('Falha ao realizar login. Verifique seus dados.', 'error');
+    } catch (err: any) {
+      // Error message is already toasted in login()
     } finally {
       setIsLoading(false);
     }
@@ -125,37 +135,60 @@ export const LoginPage: React.FC = () => {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!registerName.trim()) {
+    const name = registerName.trim();
+    const phone = registerPhone.trim();
+    const email = registerEmail.trim();
+    const pass = registerPassword.trim();
+    const confPass = registerConfirmPassword.trim();
+
+    if (!name) {
       addToast('Por favor, informe seu nome completo.', 'error');
       return;
     }
-    if (!registerPhone.trim()) {
-      addToast('Por favor, informe seu telefone.', 'error');
+    if (!phone) {
+      addToast('Por favor, informe seu número de WhatsApp.', 'error');
       return;
     }
-    if (!registerEmail.trim()) {
+    if (!email) {
       addToast('Por favor, informe seu e-mail.', 'error');
       return;
     }
-    if (registerPassword && registerPassword !== registerConfirmPassword) {
-      addToast('As senhas não coincidem.', 'error');
+    if (pass && pass !== confPass) {
+      addToast('As senhas digitadas não coincidem.', 'error');
       return;
     }
 
     setIsLoading(true);
     try {
-      await registerUser(registerName, registerPhone, registerEmail, registerPassword);
-      setActivePage('agenda');
-    } catch (err) {
-      addToast('Falha ao criar conta. Tente novamente.', 'error');
+      const res = await registerUser(name, phone, email, pass);
+      if (res.success && res.accessCode) {
+        setNewlyCreatedCode(res.accessCode);
+      } else {
+        setActivePage('agenda');
+      }
+    } catch (err: any) {
+      // Error toasted in registerUser()
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleCopyCode = () => {
+    if (!newlyCreatedCode) return;
+    navigator.clipboard.writeText(newlyCreatedCode);
+    setCopiedCode(true);
+    addToast('Código copiado para a área de transferência!', 'success');
+    setTimeout(() => setCopiedCode(false), 3000);
+  };
+
+  const handleCloseCelebration = () => {
+    setNewlyCreatedCode(null);
+    setActivePage('agenda');
+  };
+
   // Open Forgot Modal
   const handleOpenForgotModal = () => {
-    setResetIdentifier(loginEmailOrPhone || '');
+    setResetIdentifier(loginIdentifier || '');
     setResetRequestedSuccess(false);
     setForgotStep('request');
     setIsForgotModalOpen(true);
@@ -164,9 +197,9 @@ export const LoginPage: React.FC = () => {
   // Submit Password Reset Request
   const handleForgotRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const idf = resetIdentifier.trim() || loginEmailOrPhone.trim();
+    const idf = resetIdentifier.trim() || loginIdentifier.trim();
     if (!idf) {
-      addToast('Por favor, informe seu número de WhatsApp.', 'error');
+      addToast('Por favor, informe seu Código, WhatsApp ou E-mail.', 'error');
       return;
     }
 
@@ -186,7 +219,7 @@ export const LoginPage: React.FC = () => {
   // Submit Complete Reset with 6-digit code
   const handleForgotCompleteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const idf = resetIdentifier.trim() || loginEmailOrPhone.trim();
+    const idf = resetIdentifier.trim() || loginIdentifier.trim();
     if (!idf) {
       addToast('Por favor, informe seu número de WhatsApp.', 'error');
       return;
@@ -219,11 +252,12 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="pb-24 pt-6 px-4 max-w-md mx-auto space-y-6 animate-fadeIn">
+    <div id="client-login-page" className="pb-24 pt-6 px-4 max-w-md mx-auto space-y-6 animate-fadeIn">
       
       {/* Brand Header */}
       <div className="text-center space-y-2 pt-2">
         <button
+          id="btn-scissors-secret-tap"
           type="button"
           onClick={handleScissorsTap}
           title="Acesso Administrativo Secreto (5 toques)"
@@ -239,13 +273,14 @@ export const LoginPage: React.FC = () => {
           <span className="text-white">BARBER</span>
         </h1>
         <p className="text-xs text-neutral-400 font-sans max-w-xs mx-auto">
-          Faça login ou crie sua conta para agendar seus horários
+          Faça login ou cadastre-se para agendar seus serviços exclusivos
         </p>
       </div>
 
       {/* Mode Switcher Tabs */}
       <div className="bg-[#111111] p-1 rounded-2xl border border-white/10 flex gap-1">
         <button
+          id="tab-mode-login"
           type="button"
           onClick={() => setMode('login')}
           className={`flex-1 py-2.5 px-3 rounded-xl font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
@@ -259,6 +294,7 @@ export const LoginPage: React.FC = () => {
         </button>
 
         <button
+          id="tab-mode-register"
           type="button"
           onClick={() => setMode('register')}
           className={`flex-1 py-2.5 px-3 rounded-xl font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
@@ -268,66 +304,75 @@ export const LoginPage: React.FC = () => {
           }`}
         >
           <UserPlus className="w-4 h-4" />
-          <span>Criar Conta</span>
+          <span>Cadastrar-se</span>
         </button>
       </div>
 
-      {/* Form Container */}
+      {/* Form Card */}
       <div className="bg-[#111111] border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4">
         
         {/* LOGIN FORM */}
         {mode === 'login' && (
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <form id="form-client-login" onSubmit={handleLoginSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-[#DAA520]" />
-                E-mail ou Telefone / WhatsApp
+                <KeyRound className="w-3.5 h-3.5 text-[#DAA520]" />
+                Código de Acesso, WhatsApp ou E-mail
               </label>
               <input
+                id="input-login-identifier"
                 type="text"
-                value={loginEmailOrPhone}
-                onChange={(e) => setLoginEmailOrPhone(e.target.value)}
-                placeholder="Ex: (11) 99999-8888 ou seu@email.com"
+                value={loginIdentifier}
+                onChange={(e) => setLoginIdentifier(e.target.value)}
+                placeholder="Ex: 123A (ou 123a), (11) 99999-8888 ou seu e-mail"
                 className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
                 required
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-[#DAA520]" />
-                Senha
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Sua senha de acesso"
-                  className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-3 pr-10 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white cursor-pointer"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div className="flex items-center gap-1 text-[11px] text-neutral-400 font-sans pt-0.5">
+                <Sparkles className="w-3 h-3 text-[#DAA520] shrink-0" />
+                <span>O código (3 dígitos e 1 letra) aceita maiúsculas ou minúsculas.</span>
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#DAA520]" />
+                  Senha
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  className="text-[11px] text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span>{showPassword ? 'Ocultar' : 'Mostrar'}</span>
+                </button>
+              </div>
+              <input
+                id="input-login-password"
+                type={showPassword ? 'text' : 'password'}
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="Sua senha cadastrada"
+                className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
+              />
+            </div>
+
             <button
+              id="btn-login-submit"
               type="submit"
               disabled={isLoading}
               className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
             >
               <LogIn className="w-4 h-4" />
-              <span>{isLoading ? 'Entrando...' : 'Entrar'}</span>
+              <span>{isLoading ? 'Entrando...' : 'Acessar Conta'}</span>
             </button>
 
-            {/* SINGLE CLEAN "ESQUECI MINHA SENHA" BUTTON */}
+            {/* ESQUECI MINHA SENHA */}
             <div className="pt-2 text-center">
               <button
+                id="btn-forgot-password-modal"
                 type="button"
                 onClick={handleOpenForgotModal}
                 className="text-xs font-mono font-medium text-neutral-400 hover:text-[#DAA520] transition-colors inline-flex items-center gap-1.5 cursor-pointer py-1 px-2.5 rounded-lg hover:bg-neutral-900/60 border border-transparent hover:border-neutral-800"
@@ -341,28 +386,45 @@ export const LoginPage: React.FC = () => {
 
         {/* REGISTER FORM */}
         {mode === 'register' && (
-          <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+          <form id="form-client-register" onSubmit={handleRegisterSubmit} className="space-y-3.5">
+            
+            {/* Uniqueness Info Banner */}
+            <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200/90 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Cadastro Único & Código Exclusivo</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-neutral-300">
+                Cada telefone e e-mail só pode ser cadastrado uma única vez. Ao concluir, você receberá um <strong>Código de Acesso de 3 dígitos e 1 letra</strong> (ex: 123A).
+              </p>
+            </div>
+
             <div className="space-y-1">
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-[#DAA520]" />
                 Nome Completo
               </label>
               <input
+                id="input-register-name"
                 type="text"
                 value={registerName}
                 onChange={(e) => setRegisterName(e.target.value)}
-                placeholder="Ex: Carlos Oliveira"
+                placeholder="Ex: Carlos Silva"
                 className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
                 required
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
-                Telefone / WhatsApp
+              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
+                  Telefone / WhatsApp
+                </span>
+                <span className="text-[10px] text-amber-400 font-mono">Sem duplicação</span>
               </label>
               <input
+                id="input-register-phone"
                 type="tel"
                 value={registerPhone}
                 onChange={(e) => setRegisterPhone(e.target.value)}
@@ -373,15 +435,19 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-[#DAA520]" />
-                E-mail
+              <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-[#DAA520]" />
+                  E-mail
+                </span>
+                <span className="text-[10px] text-amber-400 font-mono">Sem duplicação</span>
               </label>
               <input
+                id="input-register-email"
                 type="email"
                 value={registerEmail}
                 onChange={(e) => setRegisterEmail(e.target.value)}
-                placeholder="carlos@exemplo.com"
+                placeholder="seuemail@exemplo.com"
                 className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
                 required
               />
@@ -389,12 +455,22 @@ export const LoginPage: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1">
-                  <Lock className="w-3 h-3 text-[#DAA520]" />
-                  Senha
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-[#DAA520]" />
+                    Senha
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterPassword((p) => !p)}
+                    className="text-[10px] text-neutral-400 hover:text-white"
+                  >
+                    {showRegisterPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  </button>
+                </div>
                 <input
-                  type="password"
+                  id="input-register-password"
+                  type={showRegisterPassword ? 'text' : 'password'}
                   value={registerPassword}
                   onChange={(e) => setRegisterPassword(e.target.value)}
                   placeholder="******"
@@ -408,7 +484,8 @@ export const LoginPage: React.FC = () => {
                   Confirmar
                 </label>
                 <input
-                  type="password"
+                  id="input-register-confirm-password"
+                  type={showRegisterPassword ? 'text' : 'password'}
                   value={registerConfirmPassword}
                   onChange={(e) => setRegisterConfirmPassword(e.target.value)}
                   placeholder="******"
@@ -418,12 +495,13 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <button
+              id="btn-register-submit"
               type="submit"
               disabled={isLoading}
               className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 pt-3"
             >
               <UserPlus className="w-4 h-4" />
-              <span>{isLoading ? 'Cadastrando...' : 'Cadastrar e Entrar'}</span>
+              <span>{isLoading ? 'Cadastrando...' : 'Criar Minha Conta & Gerar Código'}</span>
             </button>
           </form>
         )}
@@ -432,8 +510,75 @@ export const LoginPage: React.FC = () => {
 
       {/* Security Footer Note */}
       <div className="text-center text-[11px] text-neutral-500 font-mono">
-        <p>Barbearia Jadson Barber • Seus dados estão seguros</p>
+        <p>Barbearia Jadson Barber • Ambiente Seguro & Exclusivo</p>
       </div>
+
+      {/* CELEBRATION MODAL: POST-REGISTRATION UNIQUE CODE */}
+      {newlyCreatedCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="bg-[#141414] border-2 border-[#DAA520] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-scaleUp p-6 text-center space-y-5">
+            
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-[#DAA520]/40 text-[#DAA520] flex items-center justify-center mx-auto shadow-lg shadow-[#DAA520]/20">
+              <Sparkles className="w-8 h-8 animate-pulse" />
+            </div>
+
+            <div className="space-y-1">
+              <h2 className="text-xl font-black font-mono text-white">
+                🎉 Cadastro Realizado com Sucesso!
+              </h2>
+              <p className="text-xs text-neutral-300">
+                Seu cadastro único foi concluído. Guarde seu Código de Acesso:
+              </p>
+            </div>
+
+            {/* Access Code Big Box */}
+            <div className="bg-black/80 border-2 border-dashed border-[#DAA520] rounded-2xl p-4 space-y-2">
+              <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">
+                Seu Código de Acesso Exclusivo
+              </span>
+              <div className="text-3xl font-black font-mono tracking-[0.25em] text-[#DAA520]">
+                {newlyCreatedCode}
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                (3 dígitos e 1 letra — você pode digitar maiúsculo ou minúsculo: <span className="text-white font-mono">{newlyCreatedCode.toLowerCase()}</span> ou <span className="text-white font-mono">{newlyCreatedCode}</span>)
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs font-mono flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-neutral-700"
+              >
+                {copiedCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#DAA520]" />}
+                <span>{copiedCode ? 'Código Copiado!' : 'Copiar Código'}</span>
+              </button>
+            </div>
+
+            <div className="bg-neutral-900/60 p-3 rounded-xl text-left text-[11px] text-neutral-300 space-y-1 border border-neutral-800">
+              <p className="font-semibold text-white flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                Como acessar no futuro:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-neutral-400 pl-1">
+                <li>Digite seu código ({newlyCreatedCode}) + sua senha.</li>
+                <li>Ou use seu WhatsApp / E-mail + sua senha.</li>
+              </ul>
+            </div>
+
+            <button
+              id="btn-enter-app-after-register"
+              type="button"
+              onClick={handleCloseCelebration}
+              className="w-full py-3.5 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/25 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>Acessar o Aplicativo Agora</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL RECUPERAÇÃO DE SENHA (ESQUECI A SENHA) */}
       {isForgotModalOpen && (
@@ -497,19 +642,19 @@ export const LoginPage: React.FC = () => {
                 !resetRequestedSuccess ? (
                   <form onSubmit={handleForgotRequestSubmit} className="space-y-4">
                     <p className="text-xs text-neutral-300 leading-relaxed">
-                      Informe seu <strong>número de WhatsApp cadastrado</strong>. A equipe da barbearia gerará um <strong>código de 6 dígitos</strong> e enviará diretamente para você via WhatsApp.
+                      Informe seu <strong>Código de Acesso, WhatsApp ou E-mail</strong>. A equipe da barbearia gerará um <strong>código temporário de 6 dígitos</strong> e enviará para você.
                     </p>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
-                        Seu WhatsApp
+                        <KeyRound className="w-3.5 h-3.5 text-[#DAA520]" />
+                        Seu Código, WhatsApp ou E-mail
                       </label>
                       <input
                         type="text"
                         value={resetIdentifier}
                         onChange={(e) => setResetIdentifier(e.target.value)}
-                        placeholder="Ex: (11) 99999-8888"
+                        placeholder="Ex: 123A ou (11) 99999-8888"
                         className="w-full bg-black/70 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors"
                         required
                       />
@@ -535,7 +680,7 @@ export const LoginPage: React.FC = () => {
                       className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#DAA520] to-amber-500 text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-md shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       <Sparkles className="w-4 h-4" />
-                      <span>{isLoading ? 'Enviando...' : 'Solicitar Código no WhatsApp'}</span>
+                      <span>{isLoading ? 'Enviando...' : 'Solicitar Código de Redefinição'}</span>
                     </button>
                   </form>
                 ) : (
@@ -565,14 +710,14 @@ export const LoginPage: React.FC = () => {
                 <form onSubmit={handleForgotCompleteSubmit} className="space-y-3.5">
                   <div className="space-y-1">
                     <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-1.5">
-                      <Phone className="w-3.5 h-3.5 text-[#DAA520]" />
-                      Seu WhatsApp
+                      <KeyRound className="w-3.5 h-3.5 text-[#DAA520]" />
+                      Seu Código, WhatsApp ou E-mail
                     </label>
                     <input
                       type="text"
                       value={resetIdentifier}
                       onChange={(e) => setResetIdentifier(e.target.value)}
-                      placeholder="Ex: (11) 99999-8888"
+                      placeholder="Ex: 123A ou (11) 99999-8888"
                       className="w-full bg-black/70 border border-neutral-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-[#DAA520]"
                       required
                     />
@@ -584,7 +729,7 @@ export const LoginPage: React.FC = () => {
                         <KeyRound className="w-3.5 h-3.5 text-[#DAA520]" />
                         Código de 6 Dígitos
                       </span>
-                      <span className="text-[10px] text-neutral-400 font-sans">Recebido no WhatsApp</span>
+                      <span className="text-[10px] text-neutral-400 font-sans">Recebido</span>
                     </label>
                     <input
                       type="text"
@@ -656,4 +801,3 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
-

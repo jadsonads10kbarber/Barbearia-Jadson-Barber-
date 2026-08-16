@@ -572,6 +572,11 @@ export const AdminClientesPage: React.FC = () => {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-sm text-white font-sans truncate">{c.name}</span>
+                              {c.accessCode && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[10px] font-bold" title="Código de Acesso do Cliente">
+                                  {c.accessCode}
+                                </span>
+                              )}
                               {isInactive && (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] bg-red-500/20 border border-red-500/40 text-red-400 font-bold">
                                   Inativo

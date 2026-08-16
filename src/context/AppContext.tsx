@@ -120,8 +120,14 @@ interface AppContextType {
   // Client Auth
   isLoggedIn: boolean;
   currentUser: UserAccount | null;
-  login: (emailOrPhone: string, password?: string) => Promise<boolean>;
-  registerUser: (name: string, phone: string, email: string, password?: string) => Promise<boolean>;
+  registeredUsers: UserAccount[];
+  login: (identifier: string, password?: string) => Promise<boolean>;
+  registerUser: (
+    name: string,
+    phone: string,
+    email: string,
+    password?: string
+  ) => Promise<{ success: boolean; accessCode?: string; message?: string }>;
   logout: () => void;
   updateProfile: (updatedData: Partial<UserAccount>) => void;
 
@@ -321,6 +327,31 @@ export function cleanFirestoreData<T>(data: T): T {
   return cleaned as T;
 }
 
+// Generate unique 3-digit + 1-letter client access code (e.g. 123A, 749X)
+export const generateUniqueClientAccessCode = (
+  existingUsers: UserAccount[] = [],
+  existingCustomers: Customer[] = []
+): string => {
+  const usedCodes = new Set<string>();
+  existingUsers.forEach((u) => {
+    if (u.accessCode) usedCodes.add(u.accessCode.trim().toUpperCase());
+  });
+  existingCustomers.forEach((c) => {
+    if (c.accessCode) usedCodes.add(c.accessCode.trim().toUpperCase());
+  });
+
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    const digits = Math.floor(100 + Math.random() * 900).toString(); // 100 to 999
+    const letter = letters[Math.floor(Math.random() * letters.length)];
+    const candidate = `${digits}${letter}`;
+    if (!usedCodes.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `${Math.floor(100 + Math.random() * 900)}X`;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activePage, setActivePage] = useState<ActivePage>('agenda');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
@@ -388,6 +419,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [appointments, setAppointments] = useState<Appointment[]>(sampleAppointments);
   const [deletedAppointments, setDeletedAppointments] = useState<DeletedAppointmentRecord[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [registeredUsers, setRegisteredUsers] = useState<UserAccount[]>([]);
   const [insumos, setInsumos] = useState<InsumoItem[]>(initialInsumos);
   const [products, setProducts] = useState<SaleProduct[]>(initialSaleProducts);
   const [expenses, setExpenses] = useState<ExpenseItem[]>(initialExpenses);
@@ -860,6 +892,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (err) => console.warn('Password reset requests listener notice:', err)
       );
       unsubs.push(resetUnsub);
+
+      // 17. Registered Users listener (Client Accounts)
+      const usersUnsub = onSnapshot(
+        collection(db, 'users'),
+        (snapshot) => {
+          const list: UserAccount[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as UserAccount));
+          setRegisteredUsers(list);
+        },
+        (err) => console.warn('Users listener notice:', err)
+      );
+      unsubs.push(usersUnsub);
     } catch (e) {
       console.warn('Realtime listeners running with offline/fallback state:', e);
     }
@@ -963,21 +1007,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Helper to get active password reset for email or phone
+  // Helper to get active password reset for email, phone or access code
   const getActivePasswordReset = (identifier: string): PasswordResetRequest | undefined => {
     if (!identifier || !identifier.trim()) return undefined;
-    const cleanId = identifier.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanRaw = identifier.trim().toLowerCase();
+    const rawUpper = identifier.trim().toUpperCase().replace(/\s+/g, '');
+    const cleanPhone = identifier.replace(/[^0-9]/g, '');
+
     return passwordResetRequests.find((req) => {
       if (req.status === 'concluido' || req.status === 'cancelado') return false;
       const reqPhone = (req.customerPhone || '').replace(/[^0-9]/g, '');
       const reqEmail = (req.customerEmail || '').trim().toLowerCase();
-      const rawPhone = identifier.replace(/[^0-9]/g, '');
-      const rawEmail = identifier.trim().toLowerCase();
 
-      if (rawPhone && reqPhone && (rawPhone === reqPhone || reqPhone.includes(rawPhone) || rawPhone.includes(reqPhone))) {
+      if (cleanPhone && reqPhone && (cleanPhone === reqPhone || reqPhone.endsWith(cleanPhone) || cleanPhone.endsWith(reqPhone))) {
         return true;
       }
-      if (rawEmail && reqEmail && rawEmail === reqEmail) {
+      if (cleanRaw && reqEmail && cleanRaw === reqEmail) {
         return true;
       }
       return false;
@@ -991,26 +1036,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<{ success: boolean; message: string; request?: PasswordResetRequest }> => {
     const raw = identifier.trim();
     if (!raw) {
-      addToast('Por favor, informe seu e-mail ou WhatsApp.', 'error');
+      addToast('Por favor, informe seu Código de Acesso, e-mail ou WhatsApp.', 'error');
       return { success: false, message: 'Identificador vazio' };
     }
 
+    const cleanUpper = raw.toUpperCase().replace(/\s+/g, '');
     const isEmail = raw.includes('@');
     const cleanPhone = raw.replace(/[^0-9]/g, '');
 
-    // Check if customer exists in CRM
+    // Check if customer or user exists in CRM/Users
     const matchedCustomer = customers.find((c) => {
+      const cCode = (c.accessCode || '').trim().toUpperCase();
       const cPhone = (c.phone || '').replace(/[^0-9]/g, '');
       const cEmail = (c.email || '').trim().toLowerCase();
+      if (cCode && cCode === cleanUpper) return true;
       if (isEmail && cEmail === raw.toLowerCase()) return true;
-      if (!isEmail && cleanPhone && cPhone && (cPhone === cleanPhone || cPhone.includes(cleanPhone) || cleanPhone.includes(cPhone))) return true;
+      if (!isEmail && cleanPhone && cPhone && (cPhone === cleanPhone || cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone))) return true;
       return false;
     });
 
-    const targetName = matchedCustomer?.name || name?.trim() || (isEmail ? raw.split('@')[0] : 'Cliente');
-    const targetPhone = matchedCustomer?.phone || (!isEmail ? raw : '');
-    const targetEmail = matchedCustomer?.email || (isEmail ? raw : '');
-    const targetId = matchedCustomer?.id || `cust-${Date.now()}`;
+    const matchedUser = registeredUsers.find((u) => {
+      const uCode = (u.accessCode || '').trim().toUpperCase();
+      const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
+      const uEmail = (u.email || '').trim().toLowerCase();
+      if (uCode && uCode === cleanUpper) return true;
+      if (isEmail && uEmail === raw.toLowerCase()) return true;
+      if (!isEmail && cleanPhone && uPhone && (uPhone === cleanPhone || uPhone.endsWith(cleanPhone) || cleanPhone.endsWith(uPhone))) return true;
+      return false;
+    });
+
+    const targetName = matchedCustomer?.name || matchedUser?.name || name?.trim() || (isEmail ? raw.split('@')[0] : 'Cliente');
+    const targetPhone = matchedCustomer?.phone || matchedUser?.phone || (!isEmail ? raw : '');
+    const targetEmail = matchedCustomer?.email || matchedUser?.email || (isEmail ? raw : '');
+    const targetId = matchedCustomer?.id || matchedUser?.id || `cust-${Date.now()}`;
 
     const requestId = `reset-${Date.now()}`;
     const newRequest: PasswordResetRequest = {
@@ -1241,23 +1299,119 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // CLIENT AUTH
-  const login = async (emailOrPhone: string, _password?: string): Promise<boolean> => {
-    const isEmail = emailOrPhone.includes('@');
-    const user: UserAccount = {
-      id: `usr-${Date.now()}`,
-      name: currentUser?.name || (isEmail ? emailOrPhone.split('@')[0] : 'Cliente Jadson Barber'),
-      email: isEmail ? emailOrPhone : 'cliente@jadsonbarber.com.br',
-      phone: !isEmail ? emailOrPhone : '(11) 98765-4321',
-      createdAt: new Date().toISOString(),
-      role: 'client',
-    };
+  // CLIENT AUTH WITH UNIQUE ACCESS CODE, PHONE & EMAIL VALIDATION
+  const login = async (identifier: string, password?: string): Promise<boolean> => {
+    const raw = (identifier || '').trim();
+    if (!raw) {
+      addToast('Por favor, informe seu Código de Acesso, WhatsApp ou E-mail.', 'error');
+      throw new Error('Identificador obrigatório.');
+    }
 
-    setCurrentUser(user);
-    setCustomerNameState(user.name);
-    setCustomerPhoneState(user.phone);
-    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
-    addToast(`Bem-vindo, ${user.name}! Login realizado com sucesso.`, 'success');
+    const cleanRawUpper = raw.toUpperCase().replace(/\s+/g, '');
+    const cleanRawLower = raw.toLowerCase().replace(/\s+/g, '');
+    const cleanDigits = raw.replace(/\D/g, '');
+    const isEmail = raw.includes('@');
+
+    // 1. Search in registeredUsers
+    let matchedUser = registeredUsers.find((u) => {
+      const uCode = (u.accessCode || '').trim().toUpperCase();
+      const uEmail = (u.email || '').trim().toLowerCase();
+      const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
+
+      // Match A: Access Code (case-insensitive, e.g. 123a or 123A)
+      if (uCode && (uCode === cleanRawUpper || uCode === cleanRawUpper.replace(/[^A-Z0-9]/g, ''))) {
+        return true;
+      }
+      // Match B: Email (case-insensitive)
+      if (isEmail && uEmail === cleanRawLower) {
+        return true;
+      }
+      // Match C: Phone / WhatsApp digits
+      if (!isEmail && cleanDigits && uPhoneDigits && (
+        cleanDigits === uPhoneDigits ||
+        (cleanDigits.length >= 8 && uPhoneDigits.endsWith(cleanDigits)) ||
+        (uPhoneDigits.length >= 8 && cleanDigits.endsWith(uPhoneDigits))
+      )) {
+        return true;
+      }
+      return false;
+    });
+
+    // 2. If not found in registeredUsers, search in customers collection
+    if (!matchedUser) {
+      const matchedCustomer = customers.find((c) => {
+        const cCode = (c.accessCode || '').trim().toUpperCase();
+        const cEmail = (c.email || '').trim().toLowerCase();
+        const cPhoneDigits = (c.phone || '').replace(/\D/g, '');
+
+        if (cCode && (cCode === cleanRawUpper || cCode === cleanRawUpper.replace(/[^A-Z0-9]/g, ''))) {
+          return true;
+        }
+        if (isEmail && cEmail === cleanRawLower) {
+          return true;
+        }
+        if (!isEmail && cleanDigits && cPhoneDigits && (
+          cleanDigits === cPhoneDigits ||
+          (cleanDigits.length >= 8 && cPhoneDigits.endsWith(cleanDigits)) ||
+          (cPhoneDigits.length >= 8 && cleanDigits.endsWith(cPhoneDigits))
+        )) {
+          return true;
+        }
+        return false;
+      });
+
+      if (matchedCustomer) {
+        const assignedCode = matchedCustomer.accessCode || generateUniqueClientAccessCode(registeredUsers, customers);
+        matchedUser = {
+          id: matchedCustomer.id,
+          name: matchedCustomer.name,
+          email: matchedCustomer.email || (isEmail ? raw : 'cliente@jadsonbarber.com.br'),
+          phone: matchedCustomer.phone || (!isEmail ? raw : '(11) 98765-4321'),
+          accessCode: assignedCode,
+          password: matchedCustomer.password,
+          avatar: matchedCustomer.avatar || matchedCustomer.photo,
+          createdAt: matchedCustomer.createdAt || new Date().toISOString(),
+          role: 'client',
+        };
+      }
+    }
+
+    // 3. If no matching account is found
+    if (!matchedUser) {
+      const errorMsg = 'Nenhum cadastro encontrado com este Código, WhatsApp ou E-mail. Por favor, cadastre-se primeiro!';
+      addToast(errorMsg, 'error');
+      throw new Error(errorMsg);
+    }
+
+    // 4. Verify password if account has a password
+    if (matchedUser.password && password) {
+      if (matchedUser.password.trim() !== password.trim()) {
+        const errorMsg = 'Senha incorreta. Verifique sua senha ou utilize a recuperação de senha.';
+        addToast(errorMsg, 'error');
+        throw new Error(errorMsg);
+      }
+    }
+
+    // Ensure access code exists on profile
+    if (!matchedUser.accessCode) {
+      const newCode = generateUniqueClientAccessCode(registeredUsers, customers);
+      matchedUser.accessCode = newCode;
+      try {
+        await updateDoc(doc(db, 'users', matchedUser.id), { accessCode: newCode });
+      } catch (e) {}
+      try {
+        await updateDoc(doc(db, 'customers', matchedUser.id), { accessCode: newCode });
+      } catch (e) {}
+    }
+
+    setCurrentUser(matchedUser);
+    setCustomerNameState(matchedUser.name);
+    setCustomerPhoneState(matchedUser.phone);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(matchedUser));
+    } catch (e) {}
+
+    addToast(`Bem-vindo, ${matchedUser.name}! Login realizado com sucesso.`, 'success');
     return true;
   };
 
@@ -1265,48 +1419,145 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     name: string,
     phone: string,
     email: string,
-    _password?: string
-  ): Promise<boolean> => {
+    password?: string
+  ): Promise<{ success: boolean; accessCode?: string; message?: string }> => {
+    const trimmedName = name.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password?.trim() || '';
+
+    if (!trimmedName) {
+      const msg = 'Por favor, informe seu nome completo.';
+      addToast(msg, 'error');
+      throw new Error(msg);
+    }
+    if (!trimmedPhone) {
+      const msg = 'Por favor, informe seu número de WhatsApp.';
+      addToast(msg, 'error');
+      throw new Error(msg);
+    }
+    if (!trimmedEmail) {
+      const msg = 'Por favor, informe seu e-mail.';
+      addToast(msg, 'error');
+      throw new Error(msg);
+    }
+
+    const cleanPhoneDigits = trimmedPhone.replace(/\D/g, '');
+    const cleanEmailLower = trimmedEmail.toLowerCase();
+
+    // 1. STRICT UNIQUENESS CHECK FOR PHONE / WHATSAPP
+    const phoneExistsInUsers = registeredUsers.some((u) => {
+      const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
+      if (!uPhoneDigits || !cleanPhoneDigits) return false;
+      return (
+        uPhoneDigits === cleanPhoneDigits ||
+        (cleanPhoneDigits.length >= 8 && uPhoneDigits.endsWith(cleanPhoneDigits)) ||
+        (uPhoneDigits.length >= 8 && cleanPhoneDigits.endsWith(uPhoneDigits))
+      );
+    });
+
+    const phoneExistsInCustomers = customers.some((c) => {
+      const cPhoneDigits = (c.phone || '').replace(/\D/g, '');
+      if (!cPhoneDigits || !cleanPhoneDigits) return false;
+      return (
+        cPhoneDigits === cleanPhoneDigits ||
+        (cleanPhoneDigits.length >= 8 && cPhoneDigits.endsWith(cleanPhoneDigits)) ||
+        (cPhoneDigits.length >= 8 && cleanPhoneDigits.endsWith(cPhoneDigits))
+      );
+    });
+
+    if (phoneExistsInUsers || phoneExistsInCustomers) {
+      const errorMsg = 'Este número de WhatsApp já possui cadastro! Faça login usando seu Código de Acesso ou WhatsApp.';
+      addToast(errorMsg, 'error');
+      throw new Error(errorMsg);
+    }
+
+    // 2. STRICT UNIQUENESS CHECK FOR EMAIL
+    const emailExistsInUsers = registeredUsers.some(
+      (u) => (u.email || '').trim().toLowerCase() === cleanEmailLower
+    );
+    const emailExistsInCustomers = customers.some(
+      (c) => (c.email || '').trim().toLowerCase() === cleanEmailLower
+    );
+
+    if (emailExistsInUsers || emailExistsInCustomers) {
+      const errorMsg = 'Este e-mail já está cadastrado no sistema! Faça login ou recupere sua senha.';
+      addToast(errorMsg, 'error');
+      throw new Error(errorMsg);
+    }
+
+    // 3. GENERATE UNIQUE 3-DIGIT + 1-LETTER ACCESS CODE (e.g. 123A, 749X)
+    const accessCode = generateUniqueClientAccessCode(registeredUsers, customers);
+
+    const newId = `usr-${Date.now()}`;
     const newUser: UserAccount = {
-      id: `usr-${Date.now()}`,
-      name: name.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
+      id: newId,
+      name: trimmedName,
+      phone: trimmedPhone,
+      email: trimmedEmail,
+      accessCode,
+      password: trimmedPassword,
       createdAt: new Date().toISOString(),
       role: 'client',
     };
 
+    // Update local state
+    setRegisteredUsers((prev) => [...prev, newUser]);
     setCurrentUser(newUser);
     setCustomerNameState(newUser.name);
     setCustomerPhoneState(newUser.phone);
-    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newUser));
-
-    // Sync with Firestore customers collection
     try {
-      await setDoc(doc(db, 'customers', newUser.id), {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        phone: newUser.phone,
-        createdAt: newUser.createdAt,
-        totalAppointments: 0,
-        totalSpent: 0,
-        status: 'ativo',
-      });
-      addNotification('cliente', 'Novo Cliente Cadastrado', `${newUser.name} se cadastrou no aplicativo.`);
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newUser));
+    } catch (e) {}
+
+    // Sync with Firestore users collection
+    try {
+      await setDoc(doc(db, 'users', newUser.id), cleanFirestoreData(newUser));
     } catch (e) {
-      console.warn('Customer saved locally', e);
+      console.warn('User saved locally:', e);
     }
 
-    addToast(`Conta criada com sucesso! Seja bem-vindo, ${newUser.name}.`, 'success');
-    return true;
+    // Sync with Firestore customers collection
+    const newCustomerData: Customer = {
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      phone: newUser.phone,
+      accessCode: newUser.accessCode,
+      password: trimmedPassword,
+      createdAt: new Date().toLocaleDateString('pt-BR'),
+      totalAppointments: 0,
+      totalSpent: 0,
+      status: 'ativo',
+    };
+
+    setCustomers((prev) => {
+      if (!prev.some((c) => c.id === newUser.id)) {
+        return [newCustomerData, ...prev];
+      }
+      return prev;
+    });
+
+    try {
+      await setDoc(doc(db, 'customers', newUser.id), cleanFirestoreData(newCustomerData));
+      addNotification(
+        'cliente',
+        'Novo Cliente Cadastrado',
+        `${newUser.name} se cadastrou no app. Código de Acesso: [${accessCode}].`
+      );
+    } catch (e) {
+      console.warn('Customer synced locally:', e);
+    }
+
+    addToast(`Conta criada com sucesso! Seu Código de Acesso é ${accessCode}.`, 'success');
+    return { success: true, accessCode, message: `Código de Acesso: ${accessCode}` };
   };
 
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
     addToast('Você saiu da sua conta.', 'info');
-    setActivePage('agenda');
+    setActivePage('login');
   };
 
   const updateProfile = (updatedData: Partial<UserAccount>) => {
@@ -2865,6 +3116,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCustomerPhone,
         isLoggedIn,
         currentUser,
+        registeredUsers,
         login,
         registerUser,
         logout,

@@ -95,9 +95,28 @@
         "createdAt": { "type": "string" }
       },
       "required": ["customerName", "status", "createdAt"]
+    },
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Registered client account with unique access code",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 100 },
+        "accessCode": { "type": "string", "maxLength": 10 },
+        "password": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["client", "admin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "phone", "email", "accessCode", "createdAt"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Registered clients collection"
+    },
     "/barbers/{barberId}": {
       "schema": { "$ref": "#/entities/Barber" },
       "description": "Barbers collection"

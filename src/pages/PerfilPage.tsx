@@ -1,5 +1,22 @@
 import React, { useState, useRef } from 'react';
-import { User, Phone, Mail, CalendarCheck, LogOut, Edit2, Check, ShieldCheck, Award, Sparkles, Scissors, Camera, Trash2, Upload } from 'lucide-react';
+import {
+  User,
+  Phone,
+  Mail,
+  CalendarCheck,
+  LogOut,
+  Edit2,
+  Check,
+  ShieldCheck,
+  Award,
+  Sparkles,
+  Scissors,
+  Camera,
+  Trash2,
+  Upload,
+  KeyRound,
+  Copy,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const PerfilPage: React.FC = () => {
@@ -10,6 +27,15 @@ export const PerfilPage: React.FC = () => {
   const [name, setName] = useState(currentUser?.name || '');
   const [phone, setPhone] = useState(currentUser?.phone || '');
   const [email, setEmail] = useState(currentUser?.email || '');
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  const handleCopyCode = () => {
+    if (!currentUser?.accessCode) return;
+    navigator.clipboard.writeText(currentUser.accessCode);
+    setCopiedCode(true);
+    addToast('Código de Acesso copiado!', 'success');
+    setTimeout(() => setCopiedCode(false), 2500);
+  };
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,6 +332,32 @@ export const PerfilPage: React.FC = () => {
               </span>
               <span className="font-bold text-white">{currentUser?.email}</span>
             </div>
+
+            {currentUser?.accessCode && (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-950/20 border border-[#DAA520]/30">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-3.5 h-3.5 text-[#DAA520]" />
+                  <div>
+                    <span className="text-[10px] text-[#DAA520] font-mono uppercase tracking-wider block font-bold">
+                      Código de Acesso
+                    </span>
+                    <span className="text-sm font-mono font-black text-amber-300 tracking-wider">
+                      {currentUser.accessCode}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="py-1 px-2.5 rounded-lg bg-[#DAA520]/20 hover:bg-[#DAA520]/30 text-[#DAA520] border border-[#DAA520]/40 text-[10px] font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Copiar código de acesso"
+                >
+                  {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedCode ? 'Copiado!' : 'Copiar'}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

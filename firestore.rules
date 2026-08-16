@@ -20,6 +20,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Registered Client Users
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
     // Barbers collection
     match /barbers/{barberId} {
       allow read: if true;
