@@ -302,6 +302,17 @@ export interface WeeklyDayConfig {
   extraSlots: string[];    // HH:mm array
 }
 
+export interface ClientAppModulesConfig {
+  showAgendamento: boolean; // Agendar Horário (Agendamento)
+  showMeusAgendamentos: boolean; // Meus Agendamentos / Histórico
+  showCupons: boolean; // Cupons de Desconto
+  showBarbearia: boolean; // A Barbearia (Informações, Localização, Contato)
+  showServicos: boolean; // Serviços & Preços / Combos
+  showEquipe: boolean; // Nossa Equipe / Barbeiros
+  showAvaliacoes: boolean; // Avaliações & Depoimentos
+  showFeed: boolean; // Feed & Novidades
+}
+
 export interface BarbershopInfo {
   name: string;
   shortName?: string;
@@ -323,4 +334,5 @@ export interface BarbershopInfo {
   googleMapsUrl: string;
   logo?: string;
   weeklySchedule?: WeeklyDayConfig[];
+  clientModules?: ClientAppModulesConfig;
 }

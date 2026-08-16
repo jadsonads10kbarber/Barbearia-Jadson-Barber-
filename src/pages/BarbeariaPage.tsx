@@ -135,12 +135,14 @@ export const BarbeariaPage: React.FC = () => {
               <p className="text-xs text-amber-400 font-semibold">{barbershopInfo.slogan}</p>
             </div>
 
-            <button
-              onClick={() => setActivePage('agenda')}
-              className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 shrink-0 hidden sm:block"
-            >
-              Agendar Horário
-            </button>
+            {barbershopInfo.clientModules?.showAgendamento !== false && (
+              <button
+                onClick={() => setActivePage('agenda')}
+                className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 shrink-0 hidden sm:block cursor-pointer"
+              >
+                Agendar Horário
+              </button>
+            )}
           </div>
         </div>
 

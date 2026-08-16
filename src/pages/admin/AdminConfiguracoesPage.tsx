@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Settings,
   Save,
@@ -20,10 +20,25 @@ import {
   RotateCcw,
   Music,
   Check,
+  Calendar,
+  CalendarCheck,
+  Store,
+  TicketPercent,
+  Scissors,
+  Users,
+  Star,
+  Newspaper,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Layers,
+  Sliders,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { NotificationSoundType } from '../../utils/audio';
+import { ClientAppModulesConfig } from '../../types';
+import { defaultClientModules } from '../../data/initialData';
 
 export const AdminConfiguracoesPage: React.FC = () => {
   const {
@@ -54,7 +69,145 @@ export const AdminConfiguracoesPage: React.FC = () => {
   const [isPlayingTest, setIsPlayingTest] = useState(false);
   const [isUploadingSound, setIsUploadingSound] = useState(false);
 
+  // Client Modules State
+  const [clientModules, setClientModules] = useState<ClientAppModulesConfig>(() => {
+    return barbershopInfo.clientModules || defaultClientModules;
+  });
+
+  useEffect(() => {
+    if (barbershopInfo.clientModules) {
+      setClientModules({
+        ...defaultClientModules,
+        ...barbershopInfo.clientModules,
+      });
+    }
+  }, [barbershopInfo.clientModules]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleToggleModule = async (key: keyof ClientAppModulesConfig, label: string) => {
+    const nextValue = !clientModules[key];
+    const updated: ClientAppModulesConfig = {
+      ...clientModules,
+      [key]: nextValue,
+    };
+    setClientModules(updated);
+    await updateSettings({ clientModules: updated });
+    addToast(
+      nextValue
+        ? `Módulo "${label}" ativado no app do cliente.`
+        : `Módulo "${label}" ocultado do app do cliente.`,
+      nextValue ? 'success' : 'info'
+    );
+  };
+
+  const handleEnableAllModules = async () => {
+    const allEnabled: ClientAppModulesConfig = {
+      showAgendamento: true,
+      showMeusAgendamentos: true,
+      showCupons: true,
+      showBarbearia: true,
+      showServicos: true,
+      showEquipe: true,
+      showAvaliacoes: true,
+      showFeed: true,
+    };
+    setClientModules(allEnabled);
+    await updateSettings({ clientModules: allEnabled });
+    addToast('Todos os módulos foram ativados no aplicativo do cliente!', 'success');
+  };
+
+  const handleDisableAllModules = async () => {
+    const allDisabled: ClientAppModulesConfig = {
+      showAgendamento: false,
+      showMeusAgendamentos: false,
+      showCupons: false,
+      showBarbearia: false,
+      showServicos: false,
+      showEquipe: false,
+      showAvaliacoes: false,
+      showFeed: false,
+    };
+    setClientModules(allDisabled);
+    await updateSettings({ clientModules: allDisabled });
+    addToast('Todos os módulos opcionais foram desativados no app do cliente.', 'info');
+  };
+
+  const modulesDefinition: {
+    key: keyof ClientAppModulesConfig;
+    title: string;
+    badge: string;
+    description: string;
+    icon: React.FC<{ className?: string }>;
+    accentColor: string;
+  }[] = [
+    {
+      key: 'showAgendamento',
+      title: 'Agendar Horário (Agendamento)',
+      badge: 'Principal',
+      description: 'Permite que os clientes escolham barbeiro, data, horário e serviço para agendar.',
+      icon: Calendar,
+      accentColor: '#DAA520',
+    },
+    {
+      key: 'showMeusAgendamentos',
+      title: 'Meus Agendamentos & Histórico',
+      badge: 'Cliente',
+      description: 'Aba que lista todos os agendamentos anteriores, cancelados e próximos do cliente.',
+      icon: CalendarCheck,
+      accentColor: '#3b82f6',
+    },
+    {
+      key: 'showCupons',
+      title: 'Cupons de Desconto & Ofertas',
+      badge: 'Marketing',
+      description: 'Exibe a aba com cupons promocionais públicos e vouchers individuais para o cliente copiar.',
+      icon: TicketPercent,
+      accentColor: '#10b981',
+    },
+    {
+      key: 'showBarbearia',
+      title: 'A Barbearia (Sobre & Localização)',
+      badge: 'Institucional',
+      description: 'Página com horários de atendimento, botão de rota no Google Maps e WhatsApp oficial.',
+      icon: Store,
+      accentColor: '#f59e0b',
+    },
+    {
+      key: 'showServicos',
+      title: 'Serviços & Combos Promocionais',
+      badge: 'Catálogo',
+      description: 'Catálogo detalhado de todos os cortes, químicas, barboterapia e combos com preços.',
+      icon: Scissors,
+      accentColor: '#ec4899',
+    },
+    {
+      key: 'showEquipe',
+      title: 'Nossa Equipe de Barbeiros',
+      badge: 'Profissionais',
+      description: 'Apresentação dos barbeiros da barbearia, biografia, fotos e especialidades.',
+      icon: Users,
+      accentColor: '#8b5cf6',
+    },
+    {
+      key: 'showAvaliacoes',
+      title: 'Avaliações & Experiências',
+      badge: 'Reputação',
+      description: 'Mural de notas por estrelas, depoimentos de clientes e formulário de avaliação pública.',
+      icon: Star,
+      accentColor: '#eab308',
+    },
+    {
+      key: 'showFeed',
+      title: 'Feed de Novidades & Estilo',
+      badge: 'Mural',
+      description: 'Mural de tendências, cortes da semana e comunicados da barbearia para os clientes.',
+      icon: Newspaper,
+      accentColor: '#06b6d4',
+    },
+  ];
+
+  const activeModulesCount = Object.values(clientModules).filter(Boolean).length;
 
   const handleTestSound = () => {
     setIsPlayingTest(true);
@@ -175,13 +328,14 @@ export const AdminConfiguracoesPage: React.FC = () => {
       whatsapp: cleanPhone.replace(/\D/g, ''),
       instagram: instagram.trim(),
       pixKey: pixKey.trim(),
+      clientModules,
     });
   };
 
   return (
     <AdminLayout
       title="Configurações Gerais do Sistema"
-      subtitle="Identidade da barbearia, CEP, endereço no Google Maps e sincronização em tempo real"
+      subtitle="Identidade da barbearia, CEP, módulos visíveis para clientes e alertas em tempo real"
     >
       {/* Firebase Status Badge */}
       <div className="bg-emerald-950/40 border border-emerald-500/50 rounded-2xl p-4 flex items-center justify-between">
@@ -201,6 +355,134 @@ export const AdminConfiguracoesPage: React.FC = () => {
         <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-mono font-bold uppercase border border-emerald-500/40 shrink-0">
           Ativo & Conectado
         </span>
+      </div>
+
+      {/* CONTROLE DE MÓDULOS DO APP DO CLIENTE */}
+      <div className="bg-[#111111] border border-neutral-800 rounded-2xl p-5 sm:p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#DAA520]/20 text-[#DAA520] border border-[#DAA520]/30 flex items-center justify-center shrink-0">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black font-mono tracking-tight text-white uppercase flex items-center gap-2">
+                <span>Controle de Visualização no App do Cliente</span>
+                <span className="px-2 py-0.5 rounded-full bg-[#DAA520]/15 border border-[#DAA520]/30 text-[#DAA520] text-[10px] font-bold">
+                  {activeModulesCount} de {modulesDefinition.length} Ativos
+                </span>
+              </h2>
+              <p className="text-xs text-neutral-400 font-sans">
+                Ative ou desative as abas, botões e funcionalidades que aparecem para os clientes no aplicativo.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleEnableAllModules}
+              className="py-1.5 px-3 rounded-xl bg-emerald-950/40 border border-emerald-700/50 hover:bg-emerald-900/60 text-emerald-400 font-mono text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Ativar Todos</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDisableAllModules}
+              className="py-1.5 px-3 rounded-xl bg-red-950/40 border border-red-800/50 hover:bg-red-900/60 text-red-400 font-mono text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              <span>Desativar Todos</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Modules Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {modulesDefinition.map((mod) => {
+            const Icon = mod.icon;
+            const isEnabled = clientModules[mod.key] !== false;
+
+            return (
+              <div
+                key={mod.key}
+                onClick={() => handleToggleModule(mod.key, mod.title)}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-start justify-between gap-3.5 ${
+                  isEnabled
+                    ? 'bg-neutral-900/90 border-neutral-700/90 hover:border-[#DAA520]/60 shadow-sm'
+                    : 'bg-black/60 border-neutral-800/70 hover:border-neutral-700 opacity-65'
+                }`}
+              >
+                <div className="flex items-start gap-3 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
+                      isEnabled
+                        ? 'bg-[#DAA520]/20 text-[#DAA520] border-[#DAA520]/40'
+                        : 'bg-neutral-900 text-neutral-500 border-neutral-800'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold font-mono text-white truncate">
+                        {mod.title}
+                      </span>
+                      <span
+                        className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase font-bold ${
+                          isEnabled
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-neutral-800 text-neutral-500 border border-neutral-700'
+                        }`}
+                      >
+                        {isEnabled ? 'Visível' : 'Oculto'}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-neutral-400 font-sans leading-relaxed line-clamp-2">
+                      {mod.description}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Switch Toggle Component */}
+                <div className="shrink-0 pt-0.5">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isEnabled}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleModule(mod.key, mod.title);
+                    }}
+                    className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer focus:outline-none ${
+                      isEnabled ? 'bg-[#DAA520]' : 'bg-neutral-800'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block w-4 h-4 transform bg-black rounded-full transition-transform duration-200 ease-in-out absolute top-1 ${
+                        isEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Real-time sync hint */}
+        <div className="p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-800 flex items-center justify-between text-xs text-neutral-400">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#DAA520]" />
+            <span>As alterações são sincronizadas instantaneamente no aplicativo dos clientes sem necessidade de recarregar.</span>
+          </div>
+          <span className="text-[11px] font-mono text-amber-400 font-bold hidden sm:inline">
+            Salvo automaticamente
+          </span>
+        </div>
       </div>
 
       {/* Main Settings Form */}

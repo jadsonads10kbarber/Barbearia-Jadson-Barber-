@@ -10,20 +10,20 @@ import { ClientReviewModal } from './components/ClientReviewModal';
 
 import { AgendamentoPage } from './pages/AgendamentoPage';
 import { MeusAgendamentosPage } from './pages/MeusAgendamentosPage';
-import { FeedPage } from './pages/FeedPage';
 import { BarbeariaPage } from './pages/BarbeariaPage';
 import { ServicosPage } from './pages/ServicosPage';
 import { BarbeirosPage } from './pages/BarbeirosPage';
 import { LoginPage } from './pages/LoginPage';
 import { PerfilPage } from './pages/PerfilPage';
 import { CuponsClientePage } from './pages/CuponsClientePage';
+import { AvaliacoesClientePage } from './pages/AvaliacoesClientePage';
+import { FeedPage } from './pages/FeedPage';
 
 // Admin Pages
 import { AdminLoginPage } from './pages/admin/AdminLoginPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { AdminFinanceiroPage } from './pages/admin/AdminFinanceiroPage';
 import { AdminAgendamentosPage } from './pages/admin/AdminAgendamentosPage';
-import { AdminFeedPage } from './pages/admin/AdminFeedPage';
 import { AdminEquipePage } from './pages/admin/AdminEquipePage';
 import { AdminClientesPage } from './pages/admin/AdminClientesPage';
 import { AdminServicosPage } from './pages/admin/AdminServicosPage';
@@ -55,7 +55,6 @@ const AppContent: React.FC = () => {
           {activePage === 'admin-financeiro' && <AdminFinanceiroPage />}
           {activePage === 'admin-agendamentos' && <AdminAgendamentosPage />}
           {activePage === 'admin-historico' && <AdminHistoricoPage />}
-          {activePage === 'admin-feed' && <AdminFeedPage />}
           {activePage === 'admin-equipe' && <AdminEquipePage />}
           {activePage === 'admin-clientes' && <AdminClientesPage />}
           {activePage === 'admin-servicos' && <AdminServicosPage />}
@@ -65,6 +64,7 @@ const AppContent: React.FC = () => {
           {activePage === 'admin-horarios' && <AdminHorariosPage />}
           {activePage === 'admin-avaliacoes' && <AdminAvaliacoesPage />}
           {activePage === 'admin-configuracoes' && <AdminConfiguracoesPage />}
+          {activePage === 'admin-feed' && <AdminDashboardPage />}
         </main>
         <ToastContainer />
       </div>
@@ -83,13 +83,14 @@ const AppContent: React.FC = () => {
       <main className="flex-1 max-w-5xl w-full mx-auto">
         {activePage === 'agenda' && <AgendamentoPage />}
         {activePage === 'meus-agendamentos' && <MeusAgendamentosPage />}
-        {activePage === 'feed' && <FeedPage />}
         {activePage === 'barbearia' && <BarbeariaPage />}
         {activePage === 'servicos' && <ServicosPage />}
         {activePage === 'barbeiros' && <BarbeirosPage />}
         {activePage === 'login' && <LoginPage />}
         {activePage === 'perfil' && <PerfilPage />}
         {activePage === 'cupons' && <CuponsClientePage />}
+        {activePage === 'avaliacoes' && <AvaliacoesClientePage />}
+        {activePage === 'feed' && <FeedPage />}
       </main>
 
       {/* Fixed Bottom Navigation (Mobile) */}

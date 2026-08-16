@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Calendar,
   CalendarCheck,
-  Newspaper,
   Store,
   Scissors,
   Users,
@@ -15,6 +14,8 @@ import {
   User,
   LogOut,
   TicketPercent,
+  Star,
+  Newspaper,
 } from 'lucide-react';
 import { useApp, ActivePage } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -37,16 +38,30 @@ export const Sidebar: React.FC = () => {
     setIsSidebarOpen(false);
   };
 
-  const menuItems = [
-    { id: 'agenda' as ActivePage, label: 'Agendar', icon: Calendar },
-    { id: 'meus-agendamentos' as ActivePage, label: 'Agendamentos', icon: CalendarCheck },
-    { id: 'cupons' as ActivePage, label: 'Cupons de Desconto', icon: TicketPercent },
-    { id: 'feed' as ActivePage, label: 'Feed & Novidades', icon: Newspaper },
-    { id: 'barbearia' as ActivePage, label: 'A Barbearia', icon: Store },
-    ...(isLoggedIn ? [{ id: 'perfil' as ActivePage, label: 'Meu Perfil', icon: User }] : []),
-    { id: 'servicos' as ActivePage, label: 'Serviços & Combos', icon: Scissors },
-    { id: 'barbeiros' as ActivePage, label: 'Nossa Equipe', icon: Users },
+  const modules = barbershopInfo.clientModules || {
+    showAgendamento: true,
+    showMeusAgendamentos: true,
+    showCupons: true,
+    showBarbearia: true,
+    showServicos: true,
+    showEquipe: true,
+    showAvaliacoes: true,
+    showFeed: true,
+  };
+
+  const rawMenuItems = [
+    { id: 'agenda' as ActivePage, label: 'Agendar', icon: Calendar, visible: modules.showAgendamento !== false },
+    { id: 'meus-agendamentos' as ActivePage, label: 'Agendamentos', icon: CalendarCheck, visible: modules.showMeusAgendamentos !== false },
+    { id: 'cupons' as ActivePage, label: 'Cupons de Desconto', icon: TicketPercent, visible: modules.showCupons !== false },
+    { id: 'barbearia' as ActivePage, label: 'A Barbearia', icon: Store, visible: modules.showBarbearia !== false },
+    ...(isLoggedIn ? [{ id: 'perfil' as ActivePage, label: 'Meu Perfil', icon: User, visible: true }] : []),
+    { id: 'servicos' as ActivePage, label: 'Serviços & Combos', icon: Scissors, visible: modules.showServicos !== false },
+    { id: 'barbeiros' as ActivePage, label: 'Nossa Equipe', icon: Users, visible: modules.showEquipe !== false },
+    { id: 'avaliacoes' as ActivePage, label: 'Avaliações', icon: Star, visible: modules.showAvaliacoes !== false },
+    { id: 'feed' as ActivePage, label: 'Feed & Novidades', icon: Newspaper, visible: modules.showFeed !== false },
   ];
+
+  const menuItems = rawMenuItems.filter((item) => item.visible);
 
   return (
     <div

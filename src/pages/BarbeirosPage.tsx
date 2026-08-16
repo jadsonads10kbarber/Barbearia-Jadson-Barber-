@@ -4,7 +4,9 @@ import { useApp } from '../context/AppContext';
 import { Barber } from '../types';
 
 export const BarbeirosPage: React.FC = () => {
-  const { barbers, setActivePage, setSelectedBarberForBooking } = useApp();
+  const { barbers, setActivePage, setSelectedBarberForBooking, barbershopInfo } = useApp();
+
+  const isAgendamentoEnabled = barbershopInfo.clientModules?.showAgendamento !== false;
 
   const handleSelectBarberAndBook = (barber: Barber) => {
     setSelectedBarberForBooking(barber);
@@ -37,13 +39,15 @@ export const BarbeirosPage: React.FC = () => {
               Cadastre os profissionais da sua equipe no painel administrativo para que apareçam aqui.
             </p>
           </div>
-          <button
-            onClick={() => setActivePage('agenda')}
-            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider transition-colors inline-flex items-center gap-2"
-          >
-            <span>Ir para Agendamento</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {isAgendamentoEnabled && (
+            <button
+              onClick={() => setActivePage('agenda')}
+              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider transition-colors inline-flex items-center gap-2 cursor-pointer"
+            >
+              <span>Ir para Agendamento</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -120,15 +124,17 @@ export const BarbeirosPage: React.FC = () => {
               </div>
 
               {/* Action Button */}
-              <div className="p-4 bg-neutral-950/60 border-t border-neutral-800">
-                <button
-                  onClick={() => handleSelectBarberAndBook(barber)}
-                  className="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
-                >
-                  <span>Agendar com {barber.name.split(' ')[0]}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
+              {isAgendamentoEnabled && (
+                <div className="p-4 bg-neutral-950/60 border-t border-neutral-800">
+                  <button
+                    onClick={() => handleSelectBarberAndBook(barber)}
+                    className="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 cursor-pointer"
+                  >
+                    <span>Agendar com {barber.name.split(' ')[0]}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

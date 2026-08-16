@@ -3,9 +3,11 @@ import { Scissors, Clock, Sparkles, ArrowRight, Search, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const ServicosPage: React.FC = () => {
-  const { services, setActivePage } = useApp();
+  const { services, setActivePage, barbershopInfo } = useApp();
   const [activeTab, setActiveTab] = useState<'individual' | 'combo'>('individual');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const isAgendamentoEnabled = barbershopInfo.clientModules?.showAgendamento !== false;
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -150,12 +152,14 @@ export const ServicosPage: React.FC = () => {
                       {service.durationMinutes} min
                     </span>
 
-                    <button
-                      onClick={() => setActivePage('agenda')}
-                      className="py-1.5 px-3.5 rounded-xl bg-[#DAA520]/15 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-xs uppercase tracking-wider transition-all border border-[#DAA520]/30 hover:border-[#DAA520] cursor-pointer"
-                    >
-                      Agendar
-                    </button>
+                    {isAgendamentoEnabled && (
+                      <button
+                        onClick={() => setActivePage('agenda')}
+                        className="py-1.5 px-3.5 rounded-xl bg-[#DAA520]/15 hover:bg-[#DAA520] text-[#DAA520] hover:text-black font-extrabold text-xs uppercase tracking-wider transition-all border border-[#DAA520]/30 hover:border-[#DAA520] cursor-pointer"
+                      >
+                        Agendar
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -231,13 +235,15 @@ export const ServicosPage: React.FC = () => {
 
                   <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between">
                     <span className="text-[11px] text-gray-400 font-sans">Atendimento individual com horário marcado</span>
-                    <button
-                      onClick={() => setActivePage('agenda')}
-                      className="py-2 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-md shadow-[#DAA520]/20 cursor-pointer"
-                    >
-                      <span>Agendar Este Combo</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    {isAgendamentoEnabled && (
+                      <button
+                        onClick={() => setActivePage('agenda')}
+                        className="py-2 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-md shadow-[#DAA520]/20 cursor-pointer"
+                      >
+                        <span>Agendar Este Combo</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

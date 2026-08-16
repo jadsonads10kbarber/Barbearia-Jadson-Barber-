@@ -48,7 +48,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title, subti
     { id: 'admin-financeiro', label: 'Financeiro', icon: <WalletCards className="w-4 h-4" /> },
     { id: 'admin-agendamentos', label: 'Agendamentos', icon: <CalendarDays className="w-4 h-4" /> },
     { id: 'admin-historico', label: 'Histórico', icon: <History className="w-4 h-4" /> },
-    { id: 'admin-feed', label: 'Feed', icon: <Newspaper className="w-4 h-4" /> },
     { id: 'admin-equipe', label: 'Equipe', icon: <Users className="w-4 h-4" /> },
     { id: 'admin-clientes', label: 'Clientes', icon: <ContactRound className="w-4 h-4" /> },
     { id: 'admin-servicos', label: 'Serviços & Combos', icon: <Scissors className="w-4 h-4" /> },
@@ -85,6 +84,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title, subti
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Theme Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-amber-400 hover:bg-neutral-800 transition-colors cursor-pointer"
+            title={`Alternar para tema ${theme === 'dark' ? 'claro' : 'escuro'}`}
+            aria-label="Alternar tema"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+
           {/* Notifications Bell with Sound Controls */}
           <AdminNotificationBell align="right" />
 
@@ -153,7 +162,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title, subti
                 {adminUser?.name || 'Administrador'}
               </div>
               <div className="text-[10px] text-neutral-400 truncate font-mono">
-                {adminUser?.email || 'barbeariajadsonbarber@gmail.com'}
+                {adminUser?.email ? 'Acesso Conectado' : 'Painel de Gestão'}
               </div>
             </div>
           </div>
@@ -226,6 +235,22 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title, subti
                 );
               })}
             </nav>
+
+            {/* Theme Toggle in Mobile Drawer */}
+            <div className="p-3 border-t border-neutral-800 bg-neutral-950/40">
+              <button
+                onClick={toggleTheme}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl text-neutral-300 hover:bg-neutral-800 transition-all text-xs font-mono font-bold border border-neutral-800 cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  {theme === 'dark' ? <Sun className="w-4 h-4 text-[#DAA520]" /> : <Moon className="w-4 h-4 text-indigo-400" />}
+                  <span>Modo {theme === 'dark' ? 'Escuro' : 'Claro'}</span>
+                </div>
+                <span className="text-[10px] uppercase font-bold text-[#DAA520] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                  {theme === 'dark' ? 'Mudar p/ Claro' : 'Mudar p/ Escuro'}
+                </span>
+              </button>
+            </div>
 
             <div className="p-4 border-t border-neutral-800 bg-black/60 space-y-2">
               <button

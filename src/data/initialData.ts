@@ -12,7 +12,19 @@ import {
   BlockedDate,
   Review,
   AdminNotification,
+  ClientAppModulesConfig,
 } from '../types';
+
+export const defaultClientModules: ClientAppModulesConfig = {
+  showAgendamento: true,
+  showMeusAgendamentos: true,
+  showCupons: true,
+  showBarbearia: true,
+  showServicos: true,
+  showEquipe: true,
+  showAvaliacoes: true,
+  showFeed: true,
+};
 
 export const initialBarbershopInfo: BarbershopInfo = {
   name: 'Barbearia Jadson Barber',
@@ -32,6 +44,7 @@ export const initialBarbershopInfo: BarbershopInfo = {
     sunday: 'Domingo: 09:00 às 14:00',
   },
   googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Rua+Curitiba%2C+401+-+Parque+Ip%C3%AA%2C+Feira+de+Santana+-+BA%2C+44086-402',
+  clientModules: defaultClientModules,
   weeklySchedule: [
     {
       dayOfWeek: 0,

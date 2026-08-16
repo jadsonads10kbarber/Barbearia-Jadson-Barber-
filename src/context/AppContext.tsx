@@ -56,6 +56,7 @@ import {
   initialBlockedDates,
   initialReviews,
   initialNotifications,
+  defaultClientModules,
 } from '../data/initialData';
 
 export type ActivePage =
@@ -67,6 +68,7 @@ export type ActivePage =
   | 'barbeiros'
   | 'perfil'
   | 'cupons'
+  | 'avaliacoes'
   | 'login'
   | 'admin-login'
   | 'admin-dashboard'
@@ -349,8 +351,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem(LOCAL_STORAGE_BARBERSHOP_INFO_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.weeklySchedule)) {
-          return parsed;
+        if (parsed && typeof parsed === 'object') {
+          return {
+            ...parsed,
+            clientModules: {
+              ...defaultClientModules,
+              ...(parsed.clientModules || {}),
+            },
+          };
         }
       }
     } catch (e) {}
@@ -780,9 +788,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data() as BarbershopInfo;
-            setBarbershopInfo(data);
+            const merged: BarbershopInfo = {
+              ...data,
+              clientModules: {
+                ...defaultClientModules,
+                ...(data.clientModules || {}),
+              },
+            };
+            setBarbershopInfo(merged);
             try {
-              localStorage.setItem(LOCAL_STORAGE_BARBERSHOP_INFO_KEY, JSON.stringify(data));
+              localStorage.setItem(LOCAL_STORAGE_BARBERSHOP_INFO_KEY, JSON.stringify(merged));
             } catch (e) {}
           }
         },

@@ -69,13 +69,13 @@ export const AdminLoginPage: React.FC = () => {
           <div className="space-y-1.5">
             <label className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 text-[#DAA520]" />
-              E-mail Administrativo
+              E-mail de Acesso
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="barbeariajadsonbarber@gmail.com"
+              placeholder="Digite seu e-mail"
               className="w-full bg-black/80 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#DAA520] transition-colors font-mono"
               required
             />
