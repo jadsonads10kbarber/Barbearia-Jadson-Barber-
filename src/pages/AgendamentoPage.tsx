@@ -143,6 +143,58 @@ export const AgendamentoPage: React.FC = () => {
   // Processing state
   const [createdAppointmentId, setCreatedAppointmentId] = useState<string>('');
 
+  const PRE_BOOKING_KEY = 'jadson_pre_booking_draft';
+
+  // Restore pre-booking draft on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PRE_BOOKING_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.selectedDate) setSelectedDate(parsed.selectedDate);
+        if (parsed.selectedBarberId) {
+          const b = barbers.find((item) => item.id === parsed.selectedBarberId);
+          if (b) setSelectedBarber(b);
+        }
+        if (parsed.selectedTimeSlot) setSelectedTimeSlot(parsed.selectedTimeSlot);
+        if (Array.isArray(parsed.selectedIndividualServicesIds)) {
+          const matched = services.filter((s) => parsed.selectedIndividualServicesIds.includes(s.id));
+          setSelectedIndividualServices(matched);
+        }
+        if (parsed.selectedComboId) {
+          const c = services.find((s) => s.id === parsed.selectedComboId);
+          if (c) setSelectedCombo(c);
+        }
+        if (parsed.currentStep && parsed.currentStep >= 1 && parsed.currentStep <= 5) {
+          setCurrentStep(parsed.currentStep);
+        }
+      }
+    } catch (e) {
+      console.warn('Error loading pre-booking draft:', e);
+    }
+  }, [barbers, services]);
+
+  // Save pre-booking draft whenever key booking state changes
+  useEffect(() => {
+    if (currentStep >= 6) {
+      localStorage.removeItem(PRE_BOOKING_KEY);
+      return;
+    }
+    if (selectedDate || selectedBarber || selectedTimeSlot || selectedCombo || selectedIndividualServices.length > 0) {
+      try {
+        const draft = {
+          selectedDate,
+          selectedBarberId: selectedBarber?.id,
+          selectedTimeSlot,
+          selectedIndividualServicesIds: selectedIndividualServices.map((s) => s.id),
+          selectedComboId: selectedCombo?.id,
+          currentStep,
+        };
+        localStorage.setItem(PRE_BOOKING_KEY, JSON.stringify(draft));
+      } catch (e) {}
+    }
+  }, [selectedDate, selectedBarber, selectedTimeSlot, selectedCombo, selectedIndividualServices, currentStep]);
+
   // Sync preselected barber if passed from BarbeirosPage
   useEffect(() => {
     if (selectedBarberForBooking) {
@@ -674,6 +726,9 @@ export const AgendamentoPage: React.FC = () => {
 
   // Reset booking form
   const handleNewBooking = () => {
+    try {
+      localStorage.removeItem(PRE_BOOKING_KEY);
+    } catch (e) {}
     setCurrentStep(1);
     setSelectedTimeSlot(null);
     setSelectedIndividualServices([]);

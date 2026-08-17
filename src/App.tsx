@@ -72,21 +72,6 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // If not logged in and on client pages, display LoginPage to require registration/login
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-black text-white font-sans selection:bg-amber-500 selection:text-black flex flex-col">
-        <Header />
-        <main className="flex-1 max-w-md w-full mx-auto px-4">
-          <LoginPage />
-        </main>
-        <AccessCodeModal />
-        <ToastContainer />
-        <PwaInstallPrompt />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-amber-500 selection:text-black flex flex-col">
       {/* Header */}

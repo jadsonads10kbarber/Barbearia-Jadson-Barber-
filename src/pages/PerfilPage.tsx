@@ -96,6 +96,28 @@ export const PerfilPage: React.FC = () => {
     updateProfile({ avatar: '' });
   };
 
+  if (!currentUser) {
+    return (
+      <div className="min-h-[calc(100dvh-132px)] py-8 px-4 max-w-md mx-auto flex flex-col justify-center items-center text-center space-y-5 animate-fadeIn">
+        <div className="w-16 h-16 rounded-2xl bg-[#DAA520]/15 border border-[#DAA520]/40 flex items-center justify-center text-[#DAA520] shadow-lg shadow-[#DAA520]/10">
+          <User className="w-8 h-8" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-xl font-bold text-white font-sans">Acesse o seu Perfil</h2>
+          <p className="text-xs text-gray-400 max-w-xs">
+            Entre na sua conta ou faça seu cadastro para visualizar seus dados, cupons e histórico de agendamentos.
+          </p>
+        </div>
+        <button
+          onClick={() => setActivePage('login')}
+          className="w-full py-3.5 px-5 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/20 cursor-pointer"
+        >
+          Entrar ou Criar Conta
+        </button>
+      </div>
+    );
+  }
+
   const myAppointments = appointments.filter((app) => app.customerName === currentUser?.name || app.customerPhone === currentUser?.phone);
   const totalAgendados = myAppointments.filter((app) => app.status === 'Agendado' || app.status === 'Confirmado').length;
   const totalConcluidos = myAppointments.filter((app) => app.status === 'Concluído').length;

@@ -255,6 +255,24 @@ export const MeusAgendamentosPage: React.FC = () => {
         )}
       </div>
 
+      {!currentUser && (
+        <div className="bg-[#111111] border border-[#DAA520]/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-[#DAA520] shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs font-bold text-white font-sans">Acesse seus agendamentos</h4>
+              <p className="text-xs text-[#8E9299]">Entre na sua conta para acompanhar seus agendamentos em tempo real.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActivePage('login')}
+            className="py-2 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#DAA520]/20 shrink-0 cursor-pointer"
+          >
+            Entrar / Cadastrar
+          </button>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex bg-[#111111] p-1 rounded-xl border border-white/10">
         <button

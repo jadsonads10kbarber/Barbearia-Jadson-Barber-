@@ -19,7 +19,7 @@ export const BottomNav: React.FC = () => {
   const navItems: { id: ActivePage; label: string; icon: any }[] = [];
 
   if (modules.showAgendamento !== false) {
-    navItems.push({ id: 'agenda', label: 'Agenda', icon: Calendar });
+    navItems.push({ id: 'agenda', label: 'Agendar', icon: Calendar });
   }
   if (modules.showMeusAgendamentos !== false) {
     navItems.push({ id: 'meus-agendamentos', label: 'Histórico', icon: CalendarCheck });
@@ -32,6 +32,8 @@ export const BottomNav: React.FC = () => {
   }
   if (isLoggedIn) {
     navItems.push({ id: 'perfil', label: 'Perfil', icon: User });
+  } else {
+    navItems.push({ id: 'login', label: 'Entrar', icon: User });
   }
 
   // Fallback if somehow all primary are turned off
