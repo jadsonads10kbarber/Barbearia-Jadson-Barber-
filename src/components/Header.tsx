@@ -79,11 +79,12 @@ export const Header: React.FC = () => {
                   }
                 }
               }}
-              className="py-1.5 px-2.5 rounded-lg bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-              title="Instalar aplicativo"
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Instalar aplicativo oficial"
+              aria-label="Instalar aplicativo"
             >
-              <Smartphone className="w-3.5 h-3.5 text-[#DAA520]" />
-              <span className="hidden sm:inline-block">Instalar App</span>
+              <Smartphone className="w-4 h-4 text-[#DAA520] shrink-0 stroke-[2.2]" />
+              <span className="font-sans font-bold text-xs">Instalar</span>
             </button>
           )}
 

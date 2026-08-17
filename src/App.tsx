@@ -6,7 +6,6 @@ import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
-import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { PwaInstallModal } from './components/PwaInstallModal';
 import { ClientReviewModal } from './components/ClientReviewModal';
 import { AccessCodeModal } from './components/AccessCodeModal';
@@ -104,9 +103,6 @@ const AppContent: React.FC = () => {
 
       {/* Toast Notifications Overlay */}
       <ToastContainer />
-
-      {/* PWA Floating Install Prompt */}
-      <PwaInstallPrompt />
 
       {/* PWA Full Install Modal (iOS Guide / Android Prompt) */}
       <PwaInstallModal />
