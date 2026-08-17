@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Scissors, Menu, LogIn, ShieldAlert } from 'lucide-react';
+import { Scissors, Menu, LogIn, ShieldAlert, Smartphone } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { usePwa } from '../context/PwaContext';
 
 export const Header: React.FC = () => {
   const { setIsSidebarOpen, isLoggedIn, setActivePage, isAdminLoggedIn, addToast } = useApp();
+  const { isInstalled, openInstallModal, triggerInstall, isIOS } = usePwa();
 
   const [tapCount, setTapCount] = useState<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -65,6 +67,23 @@ export const Header: React.FC = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
+          {!isInstalled && (
+            <button
+              onClick={() => {
+                if (isIOS) {
+                  openInstallModal();
+                } else {
+                  triggerInstall();
+                }
+              }}
+              className="py-1.5 px-2.5 rounded-lg bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              title="Instalar aplicativo"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-[#DAA520]" />
+              <span className="hidden sm:inline-block">Instalar App</span>
+            </button>
+          )}
+
           {isAdminLoggedIn && (
             <button
               onClick={() => setActivePage('admin-agendamentos')}

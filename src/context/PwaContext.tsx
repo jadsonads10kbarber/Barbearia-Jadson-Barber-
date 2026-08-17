@@ -5,6 +5,7 @@ export type PlatformType = 'ios' | 'android' | 'desktop';
 interface PwaContextType {
   isInstalled: boolean;
   canInstall: boolean;
+  hasNativePrompt: boolean;
   platform: PlatformType;
   isIOS: boolean;
   isAndroid: boolean;
@@ -19,14 +20,30 @@ interface PwaContextType {
 const PwaContext = createContext<PwaContextType | undefined>(undefined);
 
 const BANNER_DISMISS_KEY = 'jadson_pwa_banner_dismissed_at';
-const BANNER_COOLDOWN_DAYS = 3;
+const BANNER_COOLDOWN_DAYS = 2;
 
 export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [isBannerDismissed, setIsBannerDismissed] = useState<boolean>(true); // start true, calculate in effect
+  const [isBannerDismissed, setIsBannerDismissed] = useState<boolean>(true);
   const [platform, setPlatform] = useState<PlatformType>('desktop');
+
+  // Register service worker if supported
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('/service-worker.js')
+          .then((reg) => {
+            console.log('PWA ServiceWorker registered with scope: ', reg.scope);
+          })
+          .catch((err) => {
+            console.warn('PWA ServiceWorker registration failed: ', err);
+          });
+      });
+    }
+  }, []);
 
   // Detect platform and standalone mode
   useEffect(() => {
@@ -72,22 +89,25 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Show banner after brief initial delay for smoother UX
         const timer = setTimeout(() => {
           setIsBannerDismissed(false);
-        }, 3000);
+        }, 2000);
         return () => clearTimeout(timer);
       }
     } catch {
       setIsBannerDismissed(false);
     }
 
-    // Listen for Chrome/Android native prompt
+    // Capture beforeinstallprompt event globally
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      // Store in window for global accessibility
+      (window as any).__pwa_deferred_prompt = e;
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      (window as any).__pwa_deferred_prompt = null;
       setIsModalOpen(false);
       setIsBannerDismissed(true);
     };
@@ -119,33 +139,38 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const triggerInstall = useCallback(async () => {
-    if (deferredPrompt) {
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? (window as any).__pwa_deferred_prompt : null);
+
+    if (promptEvent) {
       try {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
+        await promptEvent.prompt();
+        const choiceResult = await promptEvent.userChoice;
+        if (choiceResult && choiceResult.outcome === 'accepted') {
           setIsInstalled(true);
           setIsModalOpen(false);
           setIsBannerDismissed(true);
         }
         setDeferredPrompt(null);
+        (window as any).__pwa_deferred_prompt = null;
       } catch (err) {
-        console.warn('Error during native install prompt:', err);
+        console.warn('Error executing native install prompt:', err);
         setIsModalOpen(true);
       }
     } else {
-      // If no deferred prompt (iOS, Firefox, or unsupported browser), open the guidance modal
+      // If native prompt is not available (iOS Safari, or already prompted), open the guide modal
       setIsModalOpen(true);
     }
   }, [deferredPrompt]);
 
-  const canInstall = !isInstalled && (Boolean(deferredPrompt) || platform === 'ios' || platform === 'android');
+  const hasNativePrompt = Boolean(deferredPrompt);
+  const canInstall = !isInstalled && (hasNativePrompt || platform === 'ios' || platform === 'android');
 
   return (
     <PwaContext.Provider
       value={{
         isInstalled,
         canInstall,
+        hasNativePrompt,
         platform,
         isIOS: platform === 'ios',
         isAndroid: platform === 'android',
