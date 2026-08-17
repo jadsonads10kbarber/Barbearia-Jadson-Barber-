@@ -80,7 +80,7 @@ export const PwaInstallModal: React.FC = () => {
           <div className="w-14 h-14 rounded-2xl bg-black border-2 border-[#DAA520] p-1 shadow-lg shadow-[#DAA520]/20 shrink-0 flex items-center justify-center relative overflow-hidden">
             <img
               src="/icon-192.png"
-              alt="JADSON BARBER"
+              alt="Barbearia"
               className="w-full h-full object-cover rounded-xl"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = 'none';
@@ -97,7 +97,7 @@ export const PwaInstallModal: React.FC = () => {
               </span>
             </div>
             <h2 id="pwa-install-title" className="text-lg sm:text-xl font-bold font-sans tracking-tight text-white">
-              Instalar JADSON BARBER
+              Instalar Barbearia
             </h2>
             <p className="text-xs text-gray-400 font-sans">
               Acesso exclusivo e instantâneo na tela inicial do seu celular

@@ -30,7 +30,7 @@ export const PwaInstallPrompt: React.FC = () => {
           <div className="w-12 h-12 rounded-xl bg-[#000000] border border-[#DAA520]/50 p-0.5 shrink-0 relative overflow-hidden flex items-center justify-center shadow-md shadow-[#DAA520]/15">
             <img
               src="/icon-192.png"
-              alt="JADSON BARBER"
+              alt="Barbearia"
               className="w-full h-full object-cover rounded-lg"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = 'none';
@@ -46,7 +46,7 @@ export const PwaInstallPrompt: React.FC = () => {
               </span>
             </div>
             <h4 className="text-xs sm:text-sm font-bold text-white font-sans">
-              Instale o App JADSON BARBER
+              Instale o App Barbearia
             </h4>
             <p className="text-[11px] text-gray-300 flex items-center gap-1">
               <Zap className="w-3 h-3 text-[#DAA520] shrink-0" />

@@ -1,7 +1,8 @@
 {
   "id": "com.jadsonbarber.app",
-  "name": "JADSON BARBER — Barbearia & Agendamento",
-  "description": "Barbearia JADSON BARBER — Rua Curitiba, 401, Parque Ipê, Feira de Santana - BA, CEP 44086-402. Agendamentos e serviços.",
+  "name": "Barbearia",
+  "short_name": "Barbearia",
+  "description": "Barbearia Jadson Barber — Agendamento online simples e rápido.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
