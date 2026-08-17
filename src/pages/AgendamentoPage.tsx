@@ -592,12 +592,11 @@ export const AgendamentoPage: React.FC = () => {
       return;
     }
 
-    if (!customerName.trim()) {
-      addToast('Por favor, informe seu nome.', 'error');
-      return;
-    }
-    if (!customerPhone.trim()) {
-      addToast('Por favor, informe seu telefone de contato.', 'error');
+    const effectiveName = customerName?.trim() || currentUser?.name?.trim() || 'Cliente';
+    const effectivePhone = customerPhone?.trim() || currentUser?.phone?.trim() || '';
+
+    if (!effectiveName) {
+      addToast('Por favor, faça login para confirmar o agendamento.', 'error');
       return;
     }
 
@@ -697,8 +696,8 @@ export const AgendamentoPage: React.FC = () => {
     try {
       const created = await addAppointment({
         customerId: currentUser?.id || 'cust-local',
-        customerName,
-        customerPhone,
+        customerName: effectiveName,
+        customerPhone: effectivePhone,
         customerAvatar: currentUser?.avatar || '',
         barberId: selectedBarber.id,
         barberName: selectedBarber.name,
@@ -724,11 +723,44 @@ export const AgendamentoPage: React.FC = () => {
     }
   };
 
+  // Auto-confirm booking if returning from login/register with pre-booking draft
+  const autoConfirmTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    const shouldAutoConfirm = sessionStorage.getItem('jadson_auto_confirm_after_auth') === 'true';
+    if (
+      shouldAutoConfirm &&
+      isLoggedIn &&
+      currentUser &&
+      selectedDate &&
+      selectedBarber &&
+      selectedTimeSlot &&
+      (selectedCombo || selectedIndividualServices.length > 0) &&
+      !autoConfirmTriggeredRef.current &&
+      currentStep <= 5
+    ) {
+      autoConfirmTriggeredRef.current = true;
+      sessionStorage.removeItem('jadson_auto_confirm_after_auth');
+      handleConfirmBooking();
+    }
+  }, [
+    isLoggedIn,
+    currentUser,
+    selectedDate,
+    selectedBarber,
+    selectedTimeSlot,
+    selectedCombo,
+    selectedIndividualServices,
+    currentStep,
+  ]);
+
   // Reset booking form
   const handleNewBooking = () => {
     try {
       localStorage.removeItem(PRE_BOOKING_KEY);
+      sessionStorage.removeItem('jadson_auto_confirm_after_auth');
     } catch (e) {}
+    autoConfirmTriggeredRef.current = false;
     setCurrentStep(1);
     setSelectedTimeSlot(null);
     setSelectedIndividualServices([]);
@@ -1674,38 +1706,6 @@ export const AgendamentoPage: React.FC = () => {
             </div>
           )}
 
-          {/* Customer Inputs */}
-          <div className="bg-[#111111] border border-white/10 rounded-xl p-3.5 space-y-3">
-            <h3 className="text-xs font-bold uppercase text-[#DAA520] tracking-widest font-sans">
-              Seus Dados para Contato
-            </h3>
-
-            <div>
-              <label className="text-[11px] text-[#8E9299] block mb-1 uppercase tracking-wider font-sans">Seu Nome Completo:</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Ex: Carlos Silva"
-                className="w-full bg-[#000000] border border-white/10 focus:border-[#DAA520] rounded-lg px-3 py-2 text-xs text-white focus:outline-none font-sans"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] text-[#8E9299] block mb-1 uppercase tracking-wider font-sans">Telefone / WhatsApp:</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Ex: (11) 99999-8888"
-                  className="w-full bg-[#000000] border border-white/10 focus:border-[#DAA520] rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none font-sans"
-                />
-                <Phone className="w-3.5 h-3.5 text-[#DAA520] absolute left-2.5 top-2.5" />
-              </div>
-            </div>
-          </div>
-
           {/* Summary Card */}
           <div className="bg-[#111111] border border-white/10 rounded-xl p-4 space-y-3 shadow-lg">
             
@@ -1940,13 +1940,14 @@ export const AgendamentoPage: React.FC = () => {
             {!isLoggedIn ? (
               <button
                 onClick={() => {
-                  addToast('Para concluir o pré-agendamento, entre ou cadastre sua conta.', 'info');
+                  sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
+                  addToast('Para concluir seu agendamento, entre ou cadastre sua conta.', 'info');
                   setActivePage('login');
                 }}
                 className="flex-1 py-3.5 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-xl shadow-[#DAA520]/20 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
               >
                 <LogIn className="w-4 h-4 stroke-[2.5]" />
-                <span>Entrar na Conta para Agendar</span>
+                <span>Entrar na Conta para Concluir</span>
               </button>
             ) : (
               <button

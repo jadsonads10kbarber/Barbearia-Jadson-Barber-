@@ -62,14 +62,25 @@ export const MeusAgendamentosPage: React.FC = () => {
   const [editSelectedServices, setEditSelectedServices] = useState<ServiceItem[]>([]);
   const [editSelectedCombo, setEditSelectedCombo] = useState<ServiceItem | null>(null);
 
-  // Separate upcoming vs history appointments
+  // Separate upcoming vs history appointments for the current user
   const { upcomingList, historyList } = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
 
     const upcoming: Appointment[] = [];
     const history: Appointment[] = [];
 
-    appointments.forEach((app) => {
+    if (!currentUser) {
+      return { upcomingList: [], historyList: [] };
+    }
+
+    const userAppointments = appointments.filter(
+      (app) =>
+        app.customerId === currentUser.id ||
+        (currentUser.phone && app.customerPhone === currentUser.phone) ||
+        (currentUser.name && app.customerName?.toLowerCase() === currentUser.name.toLowerCase())
+    );
+
+    userAppointments.forEach((app) => {
       if (app.status === 'Cancelado' || app.status === 'Concluído' || app.date < today) {
         history.push(app);
       } else {
@@ -78,7 +89,7 @@ export const MeusAgendamentosPage: React.FC = () => {
     });
 
     return { upcomingList: upcoming, historyList: history };
-  }, [appointments]);
+  }, [appointments, currentUser]);
 
   // Open Reschedule Modal
   const handleOpenReschedule = (app: Appointment) => {
@@ -227,6 +238,29 @@ export const MeusAgendamentosPage: React.FC = () => {
 
   const currentList = activeTab === 'proximos' ? upcomingList : historyList;
 
+  if (!currentUser) {
+    return (
+      <div className="min-h-[calc(100dvh-140px)] py-10 px-4 max-w-md mx-auto flex flex-col justify-center items-center text-center space-y-5 animate-fadeIn">
+        <div className="w-16 h-16 rounded-2xl bg-[#DAA520]/15 border border-[#DAA520]/40 flex items-center justify-center text-[#DAA520] shadow-lg shadow-[#DAA520]/10">
+          <CalendarCheck className="w-8 h-8" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-xl font-bold text-white font-sans">Acesse o seu Histórico</h2>
+          <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
+            Para visualizar seus agendamentos, remarcar horários e acessar seu histórico de atendimentos, entre ou cadastre-se na sua conta.
+          </p>
+        </div>
+        <button
+          onClick={() => setActivePage('login')}
+          className="w-full py-3.5 px-5 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/20 cursor-pointer flex items-center justify-center gap-2"
+        >
+          <span>Entrar ou Criar Conta</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="pb-24 pt-2 px-4 max-w-3xl mx-auto space-y-6">
       
@@ -254,24 +288,6 @@ export const MeusAgendamentosPage: React.FC = () => {
           </button>
         )}
       </div>
-
-      {!currentUser && (
-        <div className="bg-[#111111] border border-[#DAA520]/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-[#DAA520] shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-xs font-bold text-white font-sans">Acesse seus agendamentos</h4>
-              <p className="text-xs text-[#8E9299]">Entre na sua conta para acompanhar seus agendamentos em tempo real.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setActivePage('login')}
-            className="py-2 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#DAA520]/20 shrink-0 cursor-pointer"
-          >
-            Entrar / Cadastrar
-          </button>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="flex bg-[#111111] p-1 rounded-xl border border-white/10">

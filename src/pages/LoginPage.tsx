@@ -126,6 +126,10 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
     try {
       await login(cleanId, loginPassword);
+      if (typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')) {
+        sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
+        addToast('Login realizado! Concluindo seu agendamento...', 'success');
+      }
       setActivePage('agenda');
     } catch (err: any) {
       // Error message is already toasted in login()
@@ -162,6 +166,9 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
     try {
       const res = await registerUser(name, phone, email, pass);
+      if (typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')) {
+        sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
+      }
       if (res.success && res.accessCode) {
         setNewlyCreatedCode(res.accessCode);
       } else {
@@ -183,6 +190,9 @@ export const LoginPage: React.FC = () => {
   };
 
   const handleCloseCelebration = () => {
+    if (typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')) {
+      sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
+    }
     setNewlyCreatedCode(null);
     setActivePage('agenda');
   };
@@ -276,6 +286,16 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Pre-booking in progress Banner */}
+      {typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft') && (
+        <div className="bg-[#DAA520]/10 border border-[#DAA520]/40 rounded-xl p-3 flex items-center gap-2.5 text-left shadow-lg">
+          <Sparkles className="w-4 h-4 text-[#DAA520] shrink-0 animate-pulse" />
+          <p className="text-[11px] text-gray-200 font-sans leading-tight">
+            <strong className="text-[#DAA520]">Pré-agendamento em andamento:</strong> Entre ou crie sua conta para concluir sua reserva automaticamente!
+          </p>
+        </div>
+      )}
 
       {/* Mode Switcher Tabs */}
       <div className="bg-[#141414] p-1 rounded-xl border border-white/10 flex gap-1">
@@ -554,7 +574,11 @@ export const LoginPage: React.FC = () => {
               onClick={handleCloseCelebration}
               className="w-full py-3.5 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/25 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Acessar o Aplicativo Agora</span>
+              <span>
+                {typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')
+                  ? 'Concluir Agendamento Agora'
+                  : 'Acessar o Aplicativo Agora'}
+              </span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
