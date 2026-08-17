@@ -207,34 +207,56 @@ export const ServicosPage: React.FC = () => {
               {comboServices.map((combo) => (
                 <div
                   key={combo.id}
-                  className="bg-[#111111]/90 border border-[#DAA520]/30 rounded-2xl p-5 shadow-xl space-y-3 relative overflow-hidden hover:border-[#DAA520]/60 transition-all duration-200"
+                  className="bg-[#111111]/90 border border-[#DAA520]/40 rounded-2xl p-5 shadow-xl space-y-3.5 relative overflow-hidden hover:border-[#DAA520]/70 transition-all duration-200"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-white font-sans">{combo.name}</h3>
-                        {combo.popular && (
-                          <span className="text-[9px] bg-[#DAA520] text-black font-extrabold px-2 py-0.5 rounded uppercase font-sans">
-                            Recomendado
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-300 mt-1">{combo.description}</p>
-                    </div>
+                  {/* 1. Tag Combo */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 bg-[#DAA520] text-black font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-lg font-sans shadow-sm">
+                      <Scissors className="w-3 h-3 stroke-[2.5]" />
+                      <span>Combo</span>
+                    </span>
 
-                    <div className="text-right shrink-0">
+                    {combo.popular && (
+                      <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold px-2 py-0.5 rounded-md uppercase font-sans">
+                        Mais Pedido
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 2. Nome do serviço */}
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-white font-sans">{combo.name}</h3>
+                  </div>
+
+                  {/* 3. Preço & 4. Duração */}
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 bg-black/50 p-3 rounded-xl border border-white/5">
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block">Preço</span>
                       <span className="text-xl font-black text-[#DAA520] font-sans">
                         R$ {combo.price.toFixed(2).replace('.', ',')}
                       </span>
-                      <p className="text-xs text-gray-400 flex items-center justify-end gap-1 mt-0.5 font-sans">
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block">Duração</span>
+                      <span className="text-xs font-bold text-gray-200 flex items-center justify-end gap-1 font-sans">
                         <Clock className="w-3.5 h-3.5 text-[#DAA520]" />
                         {combo.durationMinutes} minutos
-                      </p>
+                      </span>
                     </div>
                   </div>
 
+                  {/* 5. Descrição */}
+                  <div>
+                    <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block mb-1">Descrição:</span>
+                    <p className="text-xs text-gray-300 font-sans leading-relaxed bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                      {combo.description || 'Procedimento completo combinado com produtos de alta qualidade.'}
+                    </p>
+                  </div>
+
+                  {/* Action */}
                   <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400 font-sans">Atendimento individual com horário marcado</span>
+                    <span className="text-[11px] text-gray-400 font-sans">Atendimento exclusivo com horário marcado</span>
                     {isAgendamentoEnabled && (
                       <button
                         onClick={() => setActivePage('agenda')}

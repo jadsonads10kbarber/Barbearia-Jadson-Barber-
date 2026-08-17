@@ -1450,7 +1450,7 @@ export const AgendamentoPage: React.FC = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-2.5">
+                  <div className="grid grid-cols-1 gap-3">
                     {filteredCombos.map((combo) => {
                       const isSelected = selectedCombo?.id === combo.id;
                       const isDisabled = selectedIndividualServices.length > 0;
@@ -1459,52 +1459,71 @@ export const AgendamentoPage: React.FC = () => {
                         <div
                           key={combo.id}
                           onClick={() => !isDisabled && handleSelectCombo(combo)}
-                          className={`p-3.5 rounded-xl border transition-all ${
+                          className={`p-4 rounded-2xl border transition-all space-y-2.5 ${
                             isDisabled
                               ? 'opacity-40 bg-[#111111] border-white/5 cursor-not-allowed'
                               : isSelected
-                              ? 'bg-[#111111] border-[#DAA520] ring-1 ring-[#DAA520]/40 shadow-md cursor-pointer'
-                              : 'bg-[#111111]/80 border-white/5 hover:border-white/20 cursor-pointer'
+                              ? 'bg-[#111111] border-[#DAA520] ring-1 ring-[#DAA520]/40 shadow-lg shadow-[#DAA520]/10 cursor-pointer'
+                              : 'bg-[#111111]/90 border-white/10 hover:border-[#DAA520]/40 cursor-pointer'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3">
+                          {/* 1. Tag Combo */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 bg-[#DAA520] text-black font-extrabold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-sans shadow-sm">
+                              <Scissors className="w-3 h-3 stroke-[2.5]" />
+                              <span>Combo</span>
+                            </span>
+
+                            <div className="flex items-center gap-2">
+                              {combo.popular && (
+                                <span className="text-[9px] bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold px-1.5 py-0.2 rounded uppercase font-sans">
+                                  Mais Vendido
+                                </span>
+                              )}
                               <div
-                                className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
                                   isSelected
                                     ? 'bg-[#DAA520] border-[#DAA520] text-black'
-                                    : 'border-white/10 bg-white/5'
+                                    : 'border-white/20 bg-neutral-900'
                                 }`}
                               >
                                 {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                               </div>
-
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h4 className="text-xs font-bold text-white font-sans">{combo.name}</h4>
-                                  {combo.popular && (
-                                    <span className="text-[9px] bg-[#DAA520] text-black font-extrabold px-1.5 py-0.2 rounded uppercase">
-                                      Mais Vendido
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-[#8E9299] mt-0.5">{combo.description}</p>
-                              </div>
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              <span className="text-sm font-extrabold text-[#DAA520] font-sans">
-                                R$ {combo.price.toFixed(2).replace('.', ',')}
-                              </span>
-                              <p className="text-[10px] text-[#8E9299] flex items-center justify-end gap-1 mt-0.5 font-sans">
-                                <Clock className="w-3 h-3" />
-                                {combo.durationMinutes} min
-                              </p>
                             </div>
                           </div>
 
+                          {/* 2. Nome do serviço */}
+                          <div>
+                            <h4 className="text-sm sm:text-base font-bold text-white font-sans">{combo.name}</h4>
+                          </div>
+
+                          {/* 3. Preço & 4. Duração */}
+                          <div className="flex items-baseline justify-between bg-black/60 px-3 py-2 rounded-xl border border-white/5">
+                            <div>
+                              <span className="text-[9px] text-[#8E9299] font-sans uppercase tracking-wider block">Preço</span>
+                              <span className="text-base font-black text-[#DAA520] font-sans">
+                                R$ {combo.price.toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[9px] text-[#8E9299] font-sans uppercase tracking-wider block">Duração</span>
+                              <span className="text-xs font-bold text-gray-200 flex items-center justify-end gap-1 font-sans">
+                                <Clock className="w-3 h-3 text-[#DAA520]" />
+                                {combo.durationMinutes} min
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 5. Descrição */}
+                          <div>
+                            <span className="text-[9px] text-[#8E9299] font-sans uppercase tracking-wider block mb-0.5">Descrição:</span>
+                            <p className="text-xs text-gray-300 font-sans leading-relaxed bg-white/[0.02] p-2 rounded-lg border border-white/5">
+                              {combo.description || 'Procedimento completo combinado.'}
+                            </p>
+                          </div>
+
                           {isDisabled && (
-                            <p className="text-[10px] text-[#DAA520]/80 mt-1.5 font-medium">
+                            <p className="text-[10px] text-[#DAA520]/80 pt-1 font-medium">
                               Desabilitado pois você já selecionou um serviço individual.
                             </p>
                           )}
@@ -1679,9 +1698,27 @@ export const AgendamentoPage: React.FC = () => {
               </span>
 
               {selectedCombo ? (
-                <div className="flex items-center justify-between py-0.5 text-xs text-gray-200 font-sans">
-                  <span>{selectedCombo.name}</span>
-                  <span className="font-sans text-[#DAA520] font-bold">R$ {selectedCombo.price.toFixed(2).replace('.', ',')}</span>
+                <div className="bg-black/50 border border-[#DAA520]/30 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1 bg-[#DAA520] text-black font-extrabold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded font-sans">
+                      Combo
+                    </span>
+                    <span className="text-[10px] text-gray-300 font-sans flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-[#DAA520]" />
+                      {selectedCombo.durationMinutes} min
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-white font-sans">{selectedCombo.name}</h4>
+                    <span className="font-sans text-[#DAA520] font-black text-sm">
+                      R$ {selectedCombo.price.toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                  {selectedCombo.description && (
+                    <p className="text-[11px] text-gray-400 font-sans border-t border-white/5 pt-1.5 leading-relaxed">
+                      {selectedCombo.description}
+                    </p>
+                  )}
                 </div>
               ) : smartComboMatch ? (
                 <div className="space-y-2.5">

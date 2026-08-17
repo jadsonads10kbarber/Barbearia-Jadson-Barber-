@@ -118,36 +118,71 @@ export const AdminServicosPage: React.FC = () => {
         {filteredServices.map((s) => (
           <div
             key={s.id}
-            className="bg-[#111111] border border-neutral-800 rounded-2xl p-5 space-y-3 hover:border-neutral-700 transition-colors flex flex-col justify-between"
+            className={`bg-[#111111] border rounded-2xl p-5 space-y-3 transition-colors flex flex-col justify-between ${
+              s.category === 'combo' ? 'border-[#DAA520]/40 shadow-lg shadow-[#DAA520]/5' : 'border-neutral-800 hover:border-neutral-700'
+            }`}
           >
-            <div className="space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
-                    <Scissors className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-base text-white font-sans">{s.name}</h3>
-                    <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
-                      <span>{s.durationMinutes} minutos</span>
-                      {s.popular && (
-                        <span className="text-amber-400 font-bold flex items-center gap-0.5">
-                          <Flame className="w-3 h-3 fill-amber-400" />
-                          Mais Pedido
-                        </span>
-                      )}
-                    </div>
-                  </div>
+            <div className="space-y-2.5">
+              {/* 1. Combo / Individual */}
+              <div className="flex items-center justify-between gap-2">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-mono font-extrabold uppercase tracking-wider ${
+                  s.category === 'combo'
+                    ? 'bg-[#DAA520] text-black shadow-sm'
+                    : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
+                }`}>
+                  {s.category === 'combo' ? <Flame className="w-3 h-3 fill-black" /> : <Scissors className="w-3 h-3" />}
+                  <span>{s.category === 'combo' ? 'Combo' : 'Individual'}</span>
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  {s.popular && (
+                    <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Flame className="w-3 h-3 fill-amber-400" />
+                      Mais Pedido
+                    </span>
+                  )}
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold ${
+                    s.status === 'inativo' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {s.status || 'ativo'}
+                  </span>
                 </div>
               </div>
 
-              <p className="text-xs text-neutral-400 leading-relaxed font-sans">{s.description}</p>
+              {/* 2. Nome do serviço */}
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">Nome do Serviço:</p>
+                <h3 className="font-bold text-base text-white font-sans mt-0.5">{s.name}</h3>
+              </div>
+
+              {/* 3. Preço & 4. Duração */}
+              <div className="grid grid-cols-2 gap-2 bg-black/60 p-2.5 rounded-xl border border-neutral-800/80">
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Preço:</p>
+                  <p className="text-base font-black font-mono text-[#DAA520]">
+                    R$ {s.price.toFixed(2).replace('.', ',')}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Duração:</p>
+                  <p className="text-xs font-bold font-mono text-neutral-200 flex items-center gap-1 mt-1">
+                    <Clock className="w-3.5 h-3.5 text-[#DAA520]" />
+                    {s.durationMinutes} minutos
+                  </p>
+                </div>
+              </div>
+
+              {/* 5. Descrição */}
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Descrição:</p>
+                <p className="text-xs text-neutral-300 leading-relaxed font-sans mt-0.5 bg-neutral-900/40 p-2 rounded-lg border border-white/5">
+                  {s.description || 'Sem descrição cadastrada.'}
+                </p>
+              </div>
             </div>
 
             <div className="pt-3 border-t border-neutral-800 flex items-center justify-between">
-              <div className="text-lg font-black font-mono text-amber-400">
-                R$ {s.price.toFixed(2)}
-              </div>
+              <span className="text-[10px] font-mono text-neutral-400">ID: {s.id.slice(0, 8)}...</span>
 
               <div className="flex items-center gap-2">
                 <button
@@ -178,7 +213,7 @@ export const AdminServicosPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <h3 className="text-sm font-mono font-bold uppercase text-white flex items-center gap-2">
                 <Scissors className="w-4 h-4 text-[#DAA520]" />
-                {editingService ? 'Editar Item' : 'Novo Item'}
+                {editingService ? `Editar ${category === 'combo' ? 'Combo' : 'Serviço'}` : `Novo ${category === 'combo' ? 'Combo' : 'Serviço'}`}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-lg text-neutral-400 hover:text-white bg-neutral-900">
                 <X className="w-4 h-4" />
@@ -186,52 +221,96 @@ export const AdminServicosPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3.5">
+              {/* 1. Categoria (Combo) */}
               <div className="space-y-1">
-                <label className="text-xs font-mono font-bold uppercase text-neutral-300">Nome do Serviço / Combo</label>
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300">
+                  1. Categoria
+                </label>
+                <div className="grid grid-cols-2 gap-2 bg-black/60 p-1 rounded-xl border border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => setCategory('combo')}
+                    className={`py-2 px-3 rounded-lg text-xs font-mono font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      category === 'combo'
+                        ? 'bg-[#DAA520] text-black shadow-sm font-extrabold'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>Categoria (Combo)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategory('individual')}
+                    className={`py-2 px-3 rounded-lg text-xs font-mono font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      category === 'individual'
+                        ? 'bg-[#DAA520] text-black shadow-sm font-extrabold'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
+                    <span>Individual</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Nome do serviço */}
+              <div className="space-y-1">
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300">
+                  2. Nome do serviço {category === 'combo' ? '(Combo)' : ''}
+                </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Combo VIP Completo"
+                  placeholder={category === 'combo' ? 'Ex: Combo Completo (Cabelo + Barba + Sobrancelha)' : 'Ex: Corte Degradê Navalhado'}
                   className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#DAA520]"
                   required
                 />
               </div>
 
+              {/* 3. Preço & 4. Duração */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Preço (R$)</label>
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">
+                    3. Preço (R$)
+                  </label>
                   <input
                     type="number"
                     step="0.01"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
-                    placeholder="50.00"
+                    placeholder="75.00"
                     className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
                     required
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">Duração (minutos)</label>
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">
+                    4. Duração (minutos)
+                  </label>
                   <input
                     type="number"
                     value={durationMinutes}
                     onChange={(e) => setDurationMinutes(e.target.value)}
-                    placeholder="30"
+                    placeholder="50"
                     className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
                     required
                   />
                 </div>
               </div>
 
+              {/* 5. Descrição */}
               <div className="space-y-1">
-                <label className="text-xs font-mono font-bold uppercase text-neutral-300">Descrição Detalhada</label>
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300">
+                  5. Descrição
+                </label>
                 <textarea
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="O que está incluso neste atendimento..."
+                  placeholder={category === 'combo' ? 'Descreva detalhadamente o que inclui este combo promocional...' : 'O que está incluso neste atendimento...'}
                   className="w-full bg-black/80 border border-neutral-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#DAA520]"
                 />
               </div>
