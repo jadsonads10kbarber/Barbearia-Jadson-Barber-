@@ -173,12 +173,15 @@ export const Sidebar: React.FC = () => {
           {!isInstalled && (
             <div className="pt-2">
               <button
-                onClick={() => {
+                onClick={async () => {
                   setIsSidebarOpen(false);
                   if (isIOS) {
                     openInstallModal();
                   } else {
-                    triggerInstall();
+                    const ok = await triggerInstall();
+                    if (!ok) {
+                      openInstallModal();
+                    }
                   }
                 }}
                 className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#DAA520]/10 border border-[#DAA520]/40 text-[#DAA520] hover:bg-[#DAA520]/20 transition-all text-xs font-bold shadow-sm cursor-pointer group"

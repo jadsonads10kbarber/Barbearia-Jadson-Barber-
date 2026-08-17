@@ -20,6 +20,21 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="JADSON BARBER" />
     <meta name="application-name" content="JADSON BARBER" />
+
+    <!-- Early PWA Prompt & Service Worker Init -->
+    <script>
+      window.__pwa_deferred_prompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwa_deferred_prompt = e;
+        window.dispatchEvent(new CustomEvent('pwa_prompt_captured', { detail: e }));
+      });
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/service-worker.js').catch(function() {});
+        });
+      }
+    </script>
     
     <!-- Open Graph -->
     <meta property="og:title" content="JADSON BARBER — Agendamento de Barbearia" />

@@ -13,7 +13,7 @@ interface PwaContextType {
   isBannerDismissed: boolean;
   openInstallModal: () => void;
   closeInstallModal: () => void;
-  triggerInstall: () => Promise<void>;
+  triggerInstall: () => Promise<boolean>;
   dismissBanner: () => void;
 }
 
@@ -28,22 +28,6 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isBannerDismissed, setIsBannerDismissed] = useState<boolean>(true);
   const [platform, setPlatform] = useState<PlatformType>('desktop');
-
-  // Register service worker if supported
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/service-worker.js')
-          .then((reg) => {
-            console.log('PWA ServiceWorker registered with scope: ', reg.scope);
-          })
-          .catch((err) => {
-            console.warn('PWA ServiceWorker registration failed: ', err);
-          });
-      });
-    }
-  }, []);
 
   // Detect platform and standalone mode
   useEffect(() => {
@@ -75,6 +59,11 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPlatform('desktop');
     }
 
+    // Check if early prompt was already captured in index.html
+    if ((window as any).__pwa_deferred_prompt) {
+      setDeferredPrompt((window as any).__pwa_deferred_prompt);
+    }
+
     // Check banner dismiss cooldown
     try {
       const dismissedTimestamp = localStorage.getItem(BANNER_DISMISS_KEY);
@@ -86,7 +75,6 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsBannerDismissed(false);
         }
       } else {
-        // Show banner after brief initial delay for smoother UX
         const timer = setTimeout(() => {
           setIsBannerDismissed(false);
         }, 2000);
@@ -96,12 +84,17 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsBannerDismissed(false);
     }
 
-    // Capture beforeinstallprompt event globally
+    // Listen for prompt events
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Store in window for global accessibility
       (window as any).__pwa_deferred_prompt = e;
+    };
+
+    const handlePromptCaptured = (e: any) => {
+      if (e.detail) {
+        setDeferredPrompt(e.detail);
+      }
     };
 
     const handleAppInstalled = () => {
@@ -113,10 +106,12 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('pwa_prompt_captured', handlePromptCaptured);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('pwa_prompt_captured', handlePromptCaptured);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
@@ -138,10 +133,10 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  const triggerInstall = useCallback(async () => {
+  const triggerInstall = useCallback(async (): Promise<boolean> => {
     const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? (window as any).__pwa_deferred_prompt : null);
 
-    if (promptEvent) {
+    if (promptEvent && typeof promptEvent.prompt === 'function') {
       try {
         await promptEvent.prompt();
         const choiceResult = await promptEvent.userChoice;
@@ -149,20 +144,21 @@ export const PwaProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsInstalled(true);
           setIsModalOpen(false);
           setIsBannerDismissed(true);
+          return true;
         }
         setDeferredPrompt(null);
         (window as any).__pwa_deferred_prompt = null;
+        return false;
       } catch (err) {
         console.warn('Error executing native install prompt:', err);
-        setIsModalOpen(true);
+        return false;
       }
     } else {
-      // If native prompt is not available (iOS Safari, or already prompted), open the guide modal
-      setIsModalOpen(true);
+      return false;
     }
   }, [deferredPrompt]);
 
-  const hasNativePrompt = Boolean(deferredPrompt);
+  const hasNativePrompt = Boolean(deferredPrompt || (typeof window !== 'undefined' && (window as any).__pwa_deferred_prompt));
   const canInstall = !isInstalled && (hasNativePrompt || platform === 'ios' || platform === 'android');
 
   return (

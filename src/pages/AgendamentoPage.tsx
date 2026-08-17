@@ -2158,11 +2158,14 @@ export const AgendamentoPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (isIOS) {
                     openInstallModal();
                   } else {
-                    triggerInstall();
+                    const ok = await triggerInstall();
+                    if (!ok) {
+                      openInstallModal();
+                    }
                   }
                 }}
                 className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 relative z-10"

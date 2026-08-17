@@ -69,11 +69,14 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-2">
           {!isInstalled && (
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (isIOS) {
                   openInstallModal();
                 } else {
-                  triggerInstall();
+                  const ok = await triggerInstall();
+                  if (!ok) {
+                    openInstallModal();
+                  }
                 }
               }}
               className="py-1.5 px-2.5 rounded-lg bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"

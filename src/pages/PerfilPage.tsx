@@ -392,11 +392,14 @@ export const PerfilPage: React.FC = () => {
       <div className="space-y-2">
         {!isInstalled && (
           <button
-            onClick={() => {
+            onClick={async () => {
               if (isIOS) {
                 openInstallModal();
               } else {
-                triggerInstall();
+                const ok = await triggerInstall();
+                if (!ok) {
+                  openInstallModal();
+                }
               }
             }}
             className="w-full p-3.5 rounded-2xl bg-neutral-900/90 hover:bg-neutral-800/90 border border-[#DAA520]/40 text-white font-mono text-xs font-bold uppercase flex items-center justify-between transition-all cursor-pointer shadow-md shadow-[#DAA520]/5"

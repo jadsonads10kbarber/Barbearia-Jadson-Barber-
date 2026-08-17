@@ -1,13 +1,24 @@
 import React from 'react';
-import { Download, X, Smartphone, ShieldCheck, Zap, Scissors } from 'lucide-react';
+import { Download, X, Smartphone, Zap, Scissors } from 'lucide-react';
 import { usePwa } from '../context/PwaContext';
 
 export const PwaInstallPrompt: React.FC = () => {
-  const { isInstalled, isBannerDismissed, dismissBanner, triggerInstall, isIOS } = usePwa();
+  const { isInstalled, isBannerDismissed, dismissBanner, triggerInstall, openInstallModal, isIOS } = usePwa();
 
   if (isInstalled || isBannerDismissed) {
     return null;
   }
+
+  const handleClick = async () => {
+    if (isIOS) {
+      openInstallModal();
+    } else {
+      const triggered = await triggerInstall();
+      if (!triggered) {
+        openInstallModal();
+      }
+    }
+  };
 
   return (
     <aside
@@ -55,7 +66,7 @@ export const PwaInstallPrompt: React.FC = () => {
 
       <div className="mt-3.5 flex items-center gap-2">
         <button
-          onClick={triggerInstall}
+          onClick={handleClick}
           className="flex-1 py-2.5 px-3 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
         >
           {isIOS ? (
