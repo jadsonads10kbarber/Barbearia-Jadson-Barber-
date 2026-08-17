@@ -21,8 +21,11 @@ import {
   TicketPercent,
   Tag,
   CheckCircle2,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { usePwa } from '../context/PwaContext';
 import { Barber, ServiceItem, AppointmentService, Coupon } from '../types';
 import {
   getAvailableSlots,
@@ -61,6 +64,7 @@ export const AgendamentoPage: React.FC = () => {
     isLoggedIn,
     currentUser,
   } = useApp();
+  const { isInstalled, openInstallModal, triggerInstall, isIOS } = usePwa();
 
   const [currentStep, setCurrentStep] = useState<BookingStep>(1);
 
@@ -2126,6 +2130,57 @@ export const AgendamentoPage: React.FC = () => {
               </span>
             </div>
           </div>
+
+          {/* Smart PWA Install Call-to-Action Card */}
+          {!isInstalled && (
+            <div className="bg-gradient-to-br from-[#1A1A1A] to-[#111111] border border-[#DAA520]/40 rounded-2xl p-5 text-left max-w-md mx-auto space-y-3.5 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-28 h-28 bg-[#DAA520]/10 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="flex items-start gap-3 relative z-10">
+                <div className="w-10 h-10 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/40 flex items-center justify-center text-[#DAA520] shrink-0 shadow-md">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#DAA520] bg-[#DAA520]/15 px-1.5 py-0.2 rounded border border-[#DAA520]/30 flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      App Oficial
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-bold text-white font-sans">
+                    Acompanhe seu agendamento no celular
+                  </h3>
+                  <p className="text-xs text-gray-300 font-sans leading-relaxed">
+                    Instale o app na sua tela inicial para receber alertas de horário e agendar seu próximo corte em 1 toque.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (isIOS) {
+                    openInstallModal();
+                  } else {
+                    triggerInstall();
+                  }
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#DAA520]/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 relative z-10"
+              >
+                {isIOS ? (
+                  <>
+                    <Smartphone className="w-4 h-4 stroke-[2.5]" />
+                    <span>Como Instalar no iPhone</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 stroke-[2.5]" />
+                    <span>Instalar Aplicativo no Celular</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto pt-2">

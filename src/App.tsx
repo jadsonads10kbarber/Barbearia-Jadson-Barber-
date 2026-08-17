@@ -1,11 +1,13 @@
 import React, { useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { PwaProvider } from './context/PwaContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
+import { PwaInstallModal } from './components/PwaInstallModal';
 import { ClientReviewModal } from './components/ClientReviewModal';
 import { AccessCodeModal } from './components/AccessCodeModal';
 
@@ -39,7 +41,7 @@ import { AdminHistoricoPage } from './pages/admin/AdminHistoricoPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const AppContent: React.FC = () => {
-  const { activePage, isLoggedIn } = useApp();
+  const { activePage } = useApp();
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -103,8 +105,11 @@ const AppContent: React.FC = () => {
       {/* Toast Notifications Overlay */}
       <ToastContainer />
 
-      {/* PWA Install Banner */}
+      {/* PWA Floating Install Prompt */}
       <PwaInstallPrompt />
+
+      {/* PWA Full Install Modal (iOS Guide / Android Prompt) */}
+      <PwaInstallModal />
 
       {/* Interactive Client Review Modal / Floating Prompt */}
       <ClientReviewModal />
@@ -117,7 +122,9 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AppProvider>
-          <AppContent />
+          <PwaProvider>
+            <AppContent />
+          </PwaProvider>
         </AppProvider>
       </ThemeProvider>
     </ErrorBoundary>
