@@ -67,26 +67,23 @@ export const Header: React.FC = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
-          {!isInstalled && (
-            <button
-              onClick={async () => {
-                if (isIOS) {
+          <button
+            onClick={async () => {
+              if (isIOS) {
+                openInstallModal();
+              } else {
+                const ok = await triggerInstall();
+                if (!ok) {
                   openInstallModal();
-                } else {
-                  const ok = await triggerInstall();
-                  if (!ok) {
-                    openInstallModal();
-                  }
                 }
-              }}
-              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Instalar aplicativo oficial"
-              aria-label="Instalar aplicativo"
-            >
-              <Smartphone className="w-4 h-4 text-[#DAA520] shrink-0 stroke-[2.2]" />
-              <span className="font-sans font-bold text-xs">Instalar</span>
-            </button>
-          )}
+              }
+            }}
+            className="p-2 sm:p-2.5 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center"
+            title="Instalar aplicativo no celular"
+            aria-label="Instalar aplicativo"
+          >
+            <Smartphone className="w-5 h-5 text-[#DAA520] stroke-[2.2]" />
+          </button>
 
           {isAdminLoggedIn && (
             <button

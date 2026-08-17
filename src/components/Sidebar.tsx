@@ -169,33 +169,31 @@ export const Sidebar: React.FC = () => {
             );
           })}
 
-          {/* Install PWA App Button (if not installed) */}
-          {!isInstalled && (
-            <div className="pt-2">
-              <button
-                onClick={async () => {
-                  setIsSidebarOpen(false);
-                  if (isIOS) {
+          {/* Install PWA App Button */}
+          <div className="pt-2">
+            <button
+              onClick={async () => {
+                setIsSidebarOpen(false);
+                if (isIOS) {
+                  openInstallModal();
+                } else {
+                  const ok = await triggerInstall();
+                  if (!ok) {
                     openInstallModal();
-                  } else {
-                    const ok = await triggerInstall();
-                    if (!ok) {
-                      openInstallModal();
-                    }
                   }
-                }}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#DAA520]/10 border border-[#DAA520]/40 text-[#DAA520] hover:bg-[#DAA520]/20 transition-all text-xs font-bold shadow-sm cursor-pointer group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Smartphone className="w-4 h-4 text-[#DAA520]" />
-                  <span>Instalar Aplicativo</span>
-                </div>
-                <span className="text-[9px] font-mono font-bold uppercase bg-[#DAA520] text-black px-1.5 py-0.5 rounded">
-                  1-Toque
-                </span>
-              </button>
-            </div>
-          )}
+                }
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/50 text-[#DAA520] hover:bg-[#DAA520]/25 transition-all text-xs font-bold shadow-sm cursor-pointer group active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-2.5">
+                <Smartphone className="w-4 h-4 text-[#DAA520] shrink-0 stroke-[2.2]" />
+                <span className="font-sans font-bold">Instalar Aplicativo</span>
+              </div>
+              <span className="text-[10px] font-mono font-bold uppercase bg-[#DAA520] text-black px-2 py-0.5 rounded-md">
+                Instalar
+              </span>
+            </button>
+          </div>
 
           {/* Theme Switcher Row */}
           <div className="pt-4 border-t border-white/5 mt-4">
