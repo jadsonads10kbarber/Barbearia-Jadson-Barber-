@@ -67,23 +67,25 @@ export const Header: React.FC = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              if (isIOS) {
-                openInstallModal();
-              } else {
-                const ok = await triggerInstall();
-                if (!ok) {
+          {!isInstalled && (
+            <button
+              onClick={async () => {
+                if (isIOS) {
                   openInstallModal();
+                } else {
+                  const ok = await triggerInstall();
+                  if (!ok) {
+                    openInstallModal();
+                  }
                 }
-              }
-            }}
-            className="p-2 sm:p-2.5 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center"
-            title="Instalar aplicativo"
-            aria-label="Instalar aplicativo"
-          >
-            <Smartphone className="w-5 h-5 text-[#DAA520] stroke-[2.2]" />
-          </button>
+              }}
+              className="p-2 sm:p-2.5 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/40 hover:bg-[#DAA520]/25 text-[#DAA520] transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center"
+              title="Instalar aplicativo"
+              aria-label="Instalar aplicativo"
+            >
+              <Smartphone className="w-5 h-5 text-[#DAA520] stroke-[2.2]" />
+            </button>
+          )}
 
           {isAdminLoggedIn && (
             <button
