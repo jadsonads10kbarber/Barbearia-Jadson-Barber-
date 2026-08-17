@@ -82,11 +82,8 @@ export const PwaInstallModal: React.FC = () => {
               src="/icon-192.png"
               alt="Barbearia"
               className="w-full h-full object-cover rounded-xl"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
+              referrerPolicy="no-referrer"
             />
-            <Scissors className="w-6 h-6 text-[#DAA520] absolute" />
           </div>
 
           <div className="space-y-1">

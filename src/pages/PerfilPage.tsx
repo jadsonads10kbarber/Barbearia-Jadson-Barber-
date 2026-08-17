@@ -405,10 +405,17 @@ export const PerfilPage: React.FC = () => {
             className="w-full p-3.5 rounded-2xl bg-neutral-900/90 hover:bg-neutral-800/90 border border-[#DAA520]/40 text-white font-mono text-xs font-bold uppercase flex items-center justify-between transition-all cursor-pointer shadow-md shadow-[#DAA520]/5"
           >
             <div className="flex items-center gap-2.5">
-              <Smartphone className="w-4 h-4 text-[#DAA520]" />
+              <div className="w-7 h-7 rounded-lg bg-black border border-[#DAA520]/50 p-0.5 overflow-hidden shrink-0 flex items-center justify-center">
+                <img
+                  src="/icon-192.png"
+                  alt="Barbearia"
+                  className="w-full h-full object-cover rounded"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
               <div className="text-left font-sans">
-                <span className="block font-bold text-xs text-white">Instalar App no Celular</span>
-                <span className="block text-[10px] text-gray-400 font-normal">Acesso rápido em 1-toque</span>
+                <span className="block font-bold text-xs text-white">Instalar App Barbearia</span>
+                <span className="block text-[10px] text-gray-400 font-normal">Acesso direto na tela inicial</span>
               </div>
             </div>
             <span className="text-[10px] font-mono font-bold uppercase bg-[#DAA520] text-black px-2 py-0.5 rounded-md">

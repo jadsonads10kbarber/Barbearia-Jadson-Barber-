@@ -2137,8 +2137,13 @@ export const AgendamentoPage: React.FC = () => {
               <div className="absolute top-0 right-0 w-28 h-28 bg-[#DAA520]/10 rounded-full blur-2xl pointer-events-none" />
               
               <div className="flex items-start gap-3 relative z-10">
-                <div className="w-10 h-10 rounded-xl bg-[#DAA520]/15 border border-[#DAA520]/40 flex items-center justify-center text-[#DAA520] shrink-0 shadow-md">
-                  <Smartphone className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-black border border-[#DAA520]/50 p-0.5 overflow-hidden shrink-0 shadow-md flex items-center justify-center">
+                  <img
+                    src="/icon-192.png"
+                    alt="Barbearia"
+                    className="w-full h-full object-cover rounded-lg"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5">
