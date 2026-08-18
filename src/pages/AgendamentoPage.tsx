@@ -821,44 +821,11 @@ export const AgendamentoPage: React.FC = () => {
     }
   };
 
-  // Auto-confirm booking if returning from login/register with pre-booking draft
-  const autoConfirmTriggeredRef = useRef(false);
-
-  useEffect(() => {
-    const shouldAutoConfirm = sessionStorage.getItem('jadson_auto_confirm_after_auth') === 'true';
-    if (
-      shouldAutoConfirm &&
-      isLoggedIn &&
-      currentUser &&
-      selectedDate &&
-      selectedBarber &&
-      selectedTimeSlot &&
-      (selectedCombo || selectedIndividualServices.length > 0) &&
-      !autoConfirmTriggeredRef.current &&
-      currentStep <= 5
-    ) {
-      autoConfirmTriggeredRef.current = true;
-      sessionStorage.removeItem('jadson_auto_confirm_after_auth');
-      handleConfirmBooking();
-    }
-  }, [
-    isLoggedIn,
-    currentUser,
-    selectedDate,
-    selectedBarber,
-    selectedTimeSlot,
-    selectedCombo,
-    selectedIndividualServices,
-    currentStep,
-  ]);
-
   // Reset booking form
   const handleNewBooking = () => {
     try {
       localStorage.removeItem(PRE_BOOKING_KEY);
-      sessionStorage.removeItem('jadson_auto_confirm_after_auth');
     } catch (e) {}
-    autoConfirmTriggeredRef.current = false;
     setCurrentStep(1);
     setSelectedTimeSlot(null);
     setSelectedIndividualServices([]);
@@ -2157,8 +2124,7 @@ export const AgendamentoPage: React.FC = () => {
             {!isLoggedIn ? (
               <button
                 onClick={() => {
-                  sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
-                  addToast('Para concluir seu agendamento, entre ou cadastre sua conta.', 'info');
+                  addToast('Para concluir seu agendamento, entre ou crie sua conta.', 'info');
                   setActivePage('login');
                 }}
                 className="flex-1 py-3.5 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-xl shadow-[#DAA520]/20 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"

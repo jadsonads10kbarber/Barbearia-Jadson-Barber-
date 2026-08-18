@@ -127,8 +127,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login(cleanId, loginPassword);
       if (typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')) {
-        sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
-        addToast('Login realizado! Concluindo seu agendamento...', 'success');
+        addToast('Login realizado com sucesso! Revise os dados e confirme seu agendamento.', 'success');
       }
       setActivePage('agenda');
     } catch (err: any) {
@@ -166,12 +165,12 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
     try {
       const res = await registerUser(name, phone, email, pass);
-      if (typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')) {
-        sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
-      }
       if (res.success && res.accessCode) {
         setNewlyCreatedCode(res.accessCode);
       } else {
+        if (typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')) {
+          addToast('Cadastro realizado! Revise os dados do seu agendamento.', 'success');
+        }
         setActivePage('agenda');
       }
     } catch (err: any) {
@@ -190,9 +189,6 @@ export const LoginPage: React.FC = () => {
   };
 
   const handleCloseCelebration = () => {
-    if (typeof window !== 'undefined' && localStorage.getItem('jadson_pre_booking_draft')) {
-      sessionStorage.setItem('jadson_auto_confirm_after_auth', 'true');
-    }
     setNewlyCreatedCode(null);
     setActivePage('agenda');
   };
