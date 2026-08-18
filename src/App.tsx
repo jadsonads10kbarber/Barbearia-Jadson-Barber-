@@ -18,6 +18,7 @@ import { BarbeirosPage } from './pages/BarbeirosPage';
 import { LoginPage } from './pages/LoginPage';
 import { PerfilPage } from './pages/PerfilPage';
 import { CuponsClientePage } from './pages/CuponsClientePage';
+import { IndiqueEGanhePage } from './pages/IndiqueEGanhePage';
 import { AvaliacoesClientePage } from './pages/AvaliacoesClientePage';
 import { FeedPage } from './pages/FeedPage';
 
@@ -32,6 +33,7 @@ import { AdminServicosPage } from './pages/admin/AdminServicosPage';
 import { AdminEstoqueInsumosPage } from './pages/admin/AdminEstoqueInsumosPage';
 import { AdminEstoqueProdutosPage } from './pages/admin/AdminEstoqueProdutosPage';
 import { AdminCuponsPage } from './pages/admin/AdminCuponsPage';
+import { AdminIndiqueGanhePage } from './pages/admin/AdminIndiqueGanhePage';
 import { AdminHorariosPage } from './pages/admin/AdminHorariosPage';
 import { AdminAvaliacoesPage } from './pages/admin/AdminAvaliacoesPage';
 import { AdminConfiguracoesPage } from './pages/admin/AdminConfiguracoesPage';
@@ -63,6 +65,7 @@ const AppContent: React.FC = () => {
           {activePage === 'admin-estoque' && <AdminEstoqueInsumosPage />}
           {activePage === 'admin-produtos' && <AdminEstoqueProdutosPage />}
           {activePage === 'admin-cupons' && <AdminCuponsPage />}
+          {activePage === 'admin-indique-ganhe' && <AdminIndiqueGanhePage />}
           {activePage === 'admin-horarios' && <AdminHorariosPage />}
           {activePage === 'admin-avaliacoes' && <AdminAvaliacoesPage />}
           {activePage === 'admin-configuracoes' && <AdminConfiguracoesPage />}
@@ -91,6 +94,7 @@ const AppContent: React.FC = () => {
         {activePage === 'login' && <LoginPage />}
         {activePage === 'perfil' && <PerfilPage />}
         {activePage === 'cupons' && <CuponsClientePage />}
+        {activePage === 'indique-e-ganhe' && <IndiqueEGanhePage />}
         {activePage === 'avaliacoes' && <AvaliacoesClientePage />}
         {activePage === 'feed' && <FeedPage />}
       </main>

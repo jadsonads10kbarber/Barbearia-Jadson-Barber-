@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Scissors, Plus, Edit2, Trash2, Tag, Clock, DollarSign, X, Check, Flame } from 'lucide-react';
+import { Scissors, Plus, Edit2, Trash2, Tag, Clock, DollarSign, X, Check, Flame, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { ServiceItem } from '../../types';
+import { getComboDiscountDetails } from '../../utils/comboMatcher';
 
 export const AdminServicosPage: React.FC = () => {
   const { services, addService, updateService, deleteService, addToast } = useApp();
@@ -14,6 +15,7 @@ export const AdminServicosPage: React.FC = () => {
   // Form state
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('30');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<'individual' | 'combo'>('individual');
@@ -26,6 +28,7 @@ export const AdminServicosPage: React.FC = () => {
     setEditingService(null);
     setName(type === 'combo' ? 'Combo Promocional ' : '');
     setPrice(type === 'combo' ? '50.00' : '35.00');
+    setOriginalPrice(type === 'combo' ? '65.00' : '');
     setDurationMinutes(type === 'combo' ? '50' : '30');
     setDescription('');
     setCategory(type);
@@ -38,6 +41,7 @@ export const AdminServicosPage: React.FC = () => {
     setEditingService(s);
     setName(s.name);
     setPrice(s.price.toString());
+    setOriginalPrice(s.originalPrice ? s.originalPrice.toString() : '');
     setDurationMinutes(s.durationMinutes.toString());
     setDescription(s.description);
     setCategory(s.category);
@@ -49,6 +53,7 @@ export const AdminServicosPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const priceNum = parseFloat(price);
+    const originalPriceNum = originalPrice ? parseFloat(originalPrice) : undefined;
     const durationNum = parseInt(durationMinutes, 10);
 
     if (!name.trim() || isNaN(priceNum) || priceNum <= 0 || isNaN(durationNum) || durationNum <= 0) {
@@ -59,6 +64,7 @@ export const AdminServicosPage: React.FC = () => {
     const payload = {
       name: name.trim(),
       price: priceNum,
+      originalPrice: originalPriceNum && originalPriceNum > priceNum ? originalPriceNum : undefined,
       durationMinutes: durationNum,
       description: description.trim(),
       category,
@@ -115,95 +121,120 @@ export const AdminServicosPage: React.FC = () => {
 
       {/* Services List Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredServices.map((s) => (
-          <div
-            key={s.id}
-            className={`bg-[#111111] border rounded-2xl p-5 space-y-3 transition-colors flex flex-col justify-between ${
-              s.category === 'combo' ? 'border-[#DAA520]/40 shadow-lg shadow-[#DAA520]/5' : 'border-neutral-800 hover:border-neutral-700'
-            }`}
-          >
-            <div className="space-y-2.5">
-              {/* 1. Combo / Individual */}
-              <div className="flex items-center justify-between gap-2">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-mono font-extrabold uppercase tracking-wider ${
-                  s.category === 'combo'
-                    ? 'bg-[#DAA520] text-black shadow-sm'
-                    : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
-                }`}>
-                  {s.category === 'combo' ? <Flame className="w-3 h-3 fill-black" /> : <Scissors className="w-3 h-3" />}
-                  <span>{s.category === 'combo' ? 'Combo' : 'Individual'}</span>
-                </span>
+        {filteredServices.map((s) => {
+          const discount = s.category === 'combo' ? getComboDiscountDetails(s, services) : null;
 
-                <div className="flex items-center gap-1.5">
-                  {s.popular && (
-                    <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <Flame className="w-3 h-3 fill-amber-400" />
-                      Mais Pedido
+          return (
+            <div
+              key={s.id}
+              className={`bg-[#111111] border rounded-2xl p-5 space-y-3 transition-colors flex flex-col justify-between ${
+                s.category === 'combo' ? 'border-[#DAA520]/40 shadow-lg shadow-[#DAA520]/5' : 'border-neutral-800 hover:border-neutral-700'
+              }`}
+            >
+              <div className="space-y-2.5">
+                {/* 1. Combo / Individual */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-mono font-extrabold uppercase tracking-wider ${
+                      s.category === 'combo'
+                        ? 'bg-[#DAA520] text-black shadow-sm'
+                        : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
+                    }`}>
+                      {s.category === 'combo' ? <Flame className="w-3 h-3 fill-black" /> : <Scissors className="w-3 h-3" />}
+                      <span>{s.category === 'combo' ? 'Combo' : 'Individual'}</span>
                     </span>
-                  )}
-                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold ${
-                    s.status === 'inativo' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  }`}>
-                    {s.status || 'ativo'}
-                  </span>
+
+                    {discount?.hasDiscount && (
+                      <span className="inline-flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono font-bold text-[10px] px-2 py-0.5 rounded">
+                        <Flame className="w-2.5 h-2.5 text-emerald-400 fill-emerald-400/40" />
+                        <span>{discount.discountPercentage}% OFF</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {s.popular && (
+                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <Flame className="w-3 h-3 fill-amber-400" />
+                        Mais Pedido
+                      </span>
+                    )}
+                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold ${
+                      s.status === 'inativo' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    }`}>
+                      {s.status || 'ativo'}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* 2. Nome do serviço */}
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">Nome do Serviço:</p>
-                <h3 className="font-bold text-base text-white font-sans mt-0.5">{s.name}</h3>
-              </div>
-
-              {/* 3. Preço & 4. Duração */}
-              <div className="grid grid-cols-2 gap-2 bg-black/60 p-2.5 rounded-xl border border-neutral-800/80">
+                {/* 2. Nome do serviço */}
                 <div>
-                  <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Preço:</p>
-                  <p className="text-base font-black font-mono text-[#DAA520]">
-                    R$ {s.price.toFixed(2).replace('.', ',')}
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">Nome do Serviço:</p>
+                  <h3 className="font-bold text-base text-white font-sans mt-0.5">{s.name}</h3>
+                </div>
+
+                {/* 3. Preço & 4. Duração */}
+                <div className="grid grid-cols-2 gap-2 bg-black/60 p-2.5 rounded-xl border border-neutral-800/80">
+                  <div>
+                    <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Preço:</p>
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                      <span className="text-base font-black font-mono text-[#DAA520]">
+                        R$ {s.price.toFixed(2).replace('.', ',')}
+                      </span>
+                      {discount?.hasDiscount && (
+                        <span className="text-[10px] text-neutral-500 line-through font-mono">
+                          R$ {discount.originalPrice.toFixed(2).replace('.', ',')}
+                        </span>
+                      )}
+                    </div>
+                    {discount?.hasDiscount && (
+                      <span className="text-[9px] text-emerald-400 font-mono block mt-0.5">
+                        Economia: R$ {discount.savingsAmount.toFixed(2).replace('.', ',')}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Duração:</p>
+                    <p className="text-xs font-bold font-mono text-neutral-200 flex items-center gap-1 mt-1">
+                      <Clock className="w-3.5 h-3.5 text-[#DAA520]" />
+                      {s.durationMinutes} minutos
+                    </p>
+                  </div>
+                </div>
+
+                {/* 5. Descrição */}
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Descrição:</p>
+                  <p className="text-xs text-neutral-300 leading-relaxed font-sans mt-0.5 bg-neutral-900/40 p-2 rounded-lg border border-white/5">
+                    {s.description || 'Sem descrição cadastrada.'}
                   </p>
                 </div>
-                <div>
-                  <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Duração:</p>
-                  <p className="text-xs font-bold font-mono text-neutral-200 flex items-center gap-1 mt-1">
-                    <Clock className="w-3.5 h-3.5 text-[#DAA520]" />
-                    {s.durationMinutes} minutos
-                  </p>
+              </div>
+
+              <div className="pt-3 border-t border-neutral-800 flex items-center justify-between">
+                <span className="text-[10px] font-mono text-neutral-400">ID: {s.id.slice(0, 8)}...</span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleOpenEdit(s)}
+                    className="p-2 rounded-xl bg-neutral-900 text-amber-400 hover:bg-neutral-800 border border-neutral-800 cursor-pointer"
+                    title="Editar"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => deleteService(s.id)}
+                    className="p-2 rounded-xl bg-neutral-900 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 border border-neutral-800 cursor-pointer"
+                    title="Excluir"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              {/* 5. Descrição */}
-              <div>
-                <p className="text-[9px] font-mono uppercase tracking-wider text-neutral-400">Descrição:</p>
-                <p className="text-xs text-neutral-300 leading-relaxed font-sans mt-0.5 bg-neutral-900/40 p-2 rounded-lg border border-white/5">
-                  {s.description || 'Sem descrição cadastrada.'}
-                </p>
-              </div>
             </div>
-
-            <div className="pt-3 border-t border-neutral-800 flex items-center justify-between">
-              <span className="text-[10px] font-mono text-neutral-400">ID: {s.id.slice(0, 8)}...</span>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleOpenEdit(s)}
-                  className="p-2 rounded-xl bg-neutral-900 text-amber-400 hover:bg-neutral-800 border border-neutral-800 cursor-pointer"
-                  title="Editar"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => deleteService(s.id)}
-                  className="p-2 rounded-xl bg-neutral-900 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 border border-neutral-800 cursor-pointer"
-                  title="Excluir"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Modal */}
@@ -270,10 +301,10 @@ export const AdminServicosPage: React.FC = () => {
               </div>
 
               {/* 3. Preço & 4. Duração */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid ${category === 'combo' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 <div className="space-y-1">
                   <label className="text-xs font-mono font-bold uppercase text-neutral-300">
-                    3. Preço (R$)
+                    {category === 'combo' ? 'Preço Combo (R$)' : '3. Preço (R$)'}
                   </label>
                   <input
                     type="number"
@@ -286,9 +317,25 @@ export const AdminServicosPage: React.FC = () => {
                   />
                 </div>
 
+                {category === 'combo' && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-mono font-bold uppercase text-neutral-300">
+                      Preço Avulso (R$)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={originalPrice}
+                      onChange={(e) => setOriginalPrice(e.target.value)}
+                      placeholder="100.00"
+                      className="w-full bg-black/80 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#DAA520]"
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-1">
                   <label className="text-xs font-mono font-bold uppercase text-neutral-300">
-                    4. Duração (minutos)
+                    {category === 'combo' ? 'Duração (min)' : '4. Duração (minutos)'}
                   </label>
                   <input
                     type="number"
@@ -300,6 +347,38 @@ export const AdminServicosPage: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {/* Live Combo Discount Preview in Modal */}
+              {category === 'combo' && parseFloat(price) > 0 && (() => {
+                const p = parseFloat(price);
+                const orig = parseFloat(originalPrice) || 0;
+                let calcOrig = orig;
+                if (!calcOrig || calcOrig <= p) {
+                  // Fallback estimate or sum
+                  calcOrig = Math.round((p / 0.8) / 5) * 5;
+                }
+                const savings = calcOrig > p ? calcOrig - p : 0;
+                const pct = calcOrig > p ? Math.round((savings / calcOrig) * 100) : 0;
+
+                return (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-emerald-400 fill-emerald-400/40 shrink-0" />
+                      <div>
+                        <span className="text-xs font-mono font-bold text-emerald-300 block">
+                          {pct}% de Desconto para o cliente
+                        </span>
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          De R$ {calcOrig.toFixed(2).replace('.', ',')} por R$ {p.toFixed(2).replace('.', ',')} (Economia de R$ {savings.toFixed(2).replace('.', ',')})
+                        </span>
+                      </div>
+                    </div>
+                    <span className="bg-emerald-500/20 text-emerald-300 text-xs font-mono font-black px-2 py-1 rounded-lg">
+                      {pct}% OFF
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* 5. Descrição */}
               <div className="space-y-1">

@@ -57,7 +57,14 @@ import {
   initialReviews,
   initialNotifications,
   defaultClientModules,
+  defaultReferralProgramConfig,
+  initialReferrals,
 } from '../data/initialData';
+import {
+  Referral,
+  ReferralProgramConfig,
+  ReferralStatus,
+} from '../types';
 
 export type ActivePage =
   | 'agenda'
@@ -68,6 +75,7 @@ export type ActivePage =
   | 'barbeiros'
   | 'perfil'
   | 'cupons'
+  | 'indique-e-ganhe'
   | 'avaliacoes'
   | 'login'
   | 'admin-login'
@@ -82,6 +90,7 @@ export type ActivePage =
   | 'admin-estoque'
   | 'admin-produtos'
   | 'admin-cupons'
+  | 'admin-indique-ganhe'
   | 'admin-horarios'
   | 'admin-avaliacoes'
   | 'admin-configuracoes';
@@ -260,6 +269,31 @@ interface AppContextType {
   dismissAppointmentReview: (appointmentId: string) => void;
   reviewedAppointmentIds: string[];
 
+  // Referral & Loyalty System (Indique e Ganhe)
+  referrals: Referral[];
+  referralProgram: ReferralProgramConfig;
+  updateReferralProgramConfig: (config: Partial<ReferralProgramConfig>) => Promise<boolean>;
+  applyReferralCode: (code: string, customerPhone?: string) => Promise<{
+    valid: boolean;
+    message: string;
+    referrer?: Customer | UserAccount;
+    discountAmount: number;
+    discountType: 'fixed' | 'percentage';
+  }>;
+  createReferral: (
+    referrerCode: string,
+    refereeName: string,
+    refereePhone: string,
+    appointmentId?: string,
+    discountGiven?: number
+  ) => Promise<Referral | null>;
+  approveReferral: (referralId: string) => Promise<boolean>;
+  cancelReferral: (referralId: string, reason?: string) => Promise<boolean>;
+  deleteReferral: (referralId: string) => Promise<boolean>;
+  adjustCustomerWallet: (customerId: string, amountChange: number, reason: string) => Promise<boolean>;
+  useCustomerWalletCredits: (customerId: string, amount: number) => Promise<boolean>;
+  currentUserReferralCode: string;
+
   // Settings
   updateSettings: (newSettings: Partial<BarbershopInfo>) => Promise<boolean>;
 
@@ -354,6 +388,28 @@ export const generateUniqueClientAccessCode = (
   return `${Math.floor(100 + Math.random() * 900)}X`;
 };
 
+// Generate unique 7-digit referral code (e.g. 8111443)
+export const generateUniqueReferralCode = (
+  existingUsers: UserAccount[] = [],
+  existingCustomers: Customer[] = []
+): string => {
+  const usedCodes = new Set<string>();
+  existingUsers.forEach((u) => {
+    if (u.referralCode) usedCodes.add(u.referralCode.trim());
+  });
+  existingCustomers.forEach((c) => {
+    if (c.referralCode) usedCodes.add(c.referralCode.trim());
+  });
+
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    const candidate = Math.floor(1000000 + Math.random() * 9000000).toString();
+    if (!usedCodes.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `${Date.now().toString().slice(-7)}`;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activePage, setActivePage] = useState<ActivePage>('agenda');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
@@ -432,6 +488,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<AdminNotification[]>(initialNotifications);
   const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>([]);
   const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
+  const [referrals, setReferrals] = useState<Referral[]>(() => {
+    try {
+      const saved = localStorage.getItem('jadson_referrals_cache');
+      return saved ? JSON.parse(saved) : initialReferrals;
+    } catch {
+      return initialReferrals;
+    }
+  });
+  const [referralProgram, setReferralProgram] = useState<ReferralProgramConfig>(() => {
+    try {
+      const saved = localStorage.getItem('jadson_referral_program_config');
+      return saved ? JSON.parse(saved) : defaultReferralProgramConfig;
+    } catch {
+      return defaultReferralProgramConfig;
+    }
+  });
 
   const [selectedBarberForBooking, setSelectedBarberForBooking] = useState<Barber | undefined>();
 
@@ -907,6 +979,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (err) => console.warn('Users listener notice:', err)
       );
       unsubs.push(usersUnsub);
+
+      // 18. Referrals listener
+      const refUnsub = onSnapshot(
+        collection(db, 'referrals'),
+        (snapshot) => {
+          const list: Referral[] = [];
+          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Referral));
+          list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+          setReferrals(list);
+          try {
+            localStorage.setItem('jadson_referrals_cache', JSON.stringify(list));
+          } catch (e) {}
+        },
+        (err) => console.warn('Referrals listener notice:', err)
+      );
+      unsubs.push(refUnsub);
+
+      // 19. Referral Program Settings listener
+      const refProgUnsub = onSnapshot(
+        doc(db, 'settings', 'referralProgram'),
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data() as ReferralProgramConfig;
+            setReferralProgram((prev) => ({ ...prev, ...data }));
+            try {
+              localStorage.setItem('jadson_referral_program_config', JSON.stringify(data));
+            } catch (e) {}
+          }
+        },
+        (err) => console.warn('Referral program settings listener notice:', err)
+      );
+      unsubs.push(refProgUnsub);
     } catch (e) {
       console.warn('Realtime listeners running with offline/fallback state:', e);
     }
@@ -1968,10 +2072,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newTotalDuration: number,
     isCombo: boolean
   ): Promise<boolean> => {
-    const updatedData = {
+    const target = appointments.find((a) => a.id === appointmentId);
+    let newEndTime = target?.endTime;
+    if (target?.startTime && newTotalDuration > 0) {
+      const [startHour, startMin] = target.startTime.split(':').map(Number);
+      const totalMinutes = startHour * 60 + startMin + newTotalDuration;
+      const endHour = Math.floor(totalMinutes / 60);
+      const endMinutes = totalMinutes % 60;
+      newEndTime = `${endHour.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+    }
+
+    const updatedData: Partial<Appointment> = {
       services: newServices,
       totalPrice: newTotalPrice,
       totalDuration: newTotalDuration,
+      ...(newEndTime ? { endTime: newEndTime } : {}),
       isCombo,
       updatedAt: new Date().toISOString(),
     };
@@ -1986,7 +2101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Services updated locally', e);
     }
 
-    addToast('Serviços do agendamento atualizados.', 'success');
+    addToast('Serviços e valor total do agendamento atualizados com sucesso.', 'success');
     return true;
   };
 
@@ -3129,6 +3244,339 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   };
 
+  // REFERRAL & LOYALTY PROGRAM (Indique e Ganhe)
+  const currentUserReferralCode = useMemo(() => {
+    if (currentUser?.referralCode) return currentUser.referralCode;
+    const matchCust = customers.find(
+      (c) =>
+        (currentUser?.id && c.id === currentUser.id) ||
+        (currentUser?.phone && c.phone === currentUser.phone) ||
+        (customerPhone && c.phone === customerPhone)
+    );
+    if (matchCust?.referralCode) return matchCust.referralCode;
+    try {
+      const cached = localStorage.getItem('jadson_client_referral_code');
+      if (cached) return cached;
+    } catch {}
+    const phoneDigits = (customerPhone || currentUser?.phone || '').replace(/\D/g, '');
+    if (phoneDigits.length >= 7) {
+      const code = phoneDigits.slice(-7);
+      try {
+        localStorage.setItem('jadson_client_referral_code', code);
+      } catch {}
+      return code;
+    }
+    return '8111443';
+  }, [currentUser, customers, customerPhone]);
+
+  const updateReferralProgramConfig = async (
+    newConfig: Partial<ReferralProgramConfig>
+  ): Promise<boolean> => {
+    const updated = {
+      ...referralProgram,
+      ...newConfig,
+    };
+    setReferralProgram(updated);
+    try {
+      localStorage.setItem('jadson_referral_program_config', JSON.stringify(updated));
+      await setDoc(doc(db, 'settings', 'referralProgram'), cleanFirestoreData(updated), { merge: true });
+      addAdminLog('Configuração Indique e Ganhe', 'Parâmetros do programa Indique e Ganhe atualizados.');
+      addToast('Configurações do Indique e Ganhe salvas com sucesso!', 'success');
+      return true;
+    } catch (e) {
+      console.warn('Referral config saved locally:', e);
+      addToast('Configurações salvas localmente.', 'info');
+      return true;
+    }
+  };
+
+  const applyReferralCode = async (
+    code: string,
+    refereePhoneToCheck?: string
+  ): Promise<{
+    valid: boolean;
+    message: string;
+    referrer?: Customer | UserAccount;
+    discountAmount: number;
+    discountType: 'fixed' | 'percentage';
+  }> => {
+    const cleanCode = code.trim().toUpperCase();
+    if (!cleanCode) {
+      return { valid: false, message: 'Digite um código de indicação válido.', discountAmount: 0, discountType: 'fixed' };
+    }
+
+    if (!referralProgram.active) {
+      return { valid: false, message: 'O programa Indique e Ganhe está temporariamente inativo.', discountAmount: 0, discountType: 'fixed' };
+    }
+
+    // Find referrer in registeredUsers or customers
+    const referrerUser = registeredUsers.find(
+      (u) => u.referralCode && u.referralCode.trim().toUpperCase() === cleanCode
+    );
+    const referrerCustomer = customers.find(
+      (c) => c.referralCode && c.referralCode.trim().toUpperCase() === cleanCode
+    );
+    const referrer = referrerCustomer || referrerUser;
+
+    let fallbackReferrer: Customer | undefined;
+    if (!referrer && cleanCode === '8111443') {
+      fallbackReferrer = customers[0] || {
+        id: 'cust-demo-ref',
+        name: 'Jadson Barber VIP',
+        phone: '(75) 98313-7171',
+        email: 'barbearia@jadson.com',
+        referralCode: '8111443',
+        createdAt: new Date().toISOString(),
+        totalAppointments: 10,
+        totalSpent: 400,
+        status: 'ativo',
+      };
+    }
+
+    const actualReferrer = referrer || fallbackReferrer;
+
+    if (!actualReferrer) {
+      return { valid: false, message: 'Código de indicação não encontrado ou inválido.', discountAmount: 0, discountType: 'fixed' };
+    }
+
+    const phoneToTest = (refereePhoneToCheck || customerPhone || currentUser?.phone || '').replace(/\D/g, '');
+    const referrerPhoneDigits = (actualReferrer.phone || '').replace(/\D/g, '');
+    if (phoneToTest && referrerPhoneDigits && phoneToTest === referrerPhoneDigits) {
+      return { valid: false, message: 'Você não pode usar o seu próprio código de indicação.', discountAmount: 0, discountType: 'fixed' };
+    }
+
+    if (currentUser?.id && actualReferrer.id && currentUser.id === actualReferrer.id) {
+      return { valid: false, message: 'Você não pode usar o seu próprio código de indicação.', discountAmount: 0, discountType: 'fixed' };
+    }
+
+    const pastCompletedCount = appointments.filter(
+      (a) =>
+        (a.customerPhone.replace(/\D/g, '') === phoneToTest || (currentUser?.id && a.customerId === currentUser.id)) &&
+        a.status === 'Concluído'
+    ).length;
+
+    if (pastCompletedCount > 0) {
+      return {
+        valid: false,
+        message: 'O benefício de indicação é exclusivo para o primeiro agendamento de novos clientes.',
+        discountAmount: 0,
+        discountType: 'fixed',
+      };
+    }
+
+    const isRefereeDiscountActive = referralProgram.giveRefereeDiscount !== false;
+    const discountVal = isRefereeDiscountActive ? (referralProgram.refereeDiscount || 5.0) : 0;
+    
+    return {
+      valid: true,
+      message: isRefereeDiscountActive
+        ? `Código de ${actualReferrer.name.split(' ')[0]} aplicado! Você ganhou R$ ${discountVal.toFixed(2).replace('.', ',')} de desconto!`
+        : `Código de ${actualReferrer.name.split(' ')[0]} registrado com sucesso! Seu amigo receberá o bônus após o seu atendimento.`,
+      referrer: actualReferrer,
+      discountAmount: discountVal,
+      discountType: referralProgram.refereeDiscountType || 'fixed',
+    };
+  };
+
+  const createReferral = async (
+    referrerCode: string,
+    refereeName: string,
+    refereePhone: string,
+    appointmentId?: string,
+    discountGiven?: number
+  ): Promise<Referral | null> => {
+    const cleanCode = referrerCode.trim().toUpperCase();
+    const referrerUser = registeredUsers.find(
+      (u) => u.referralCode && u.referralCode.trim().toUpperCase() === cleanCode
+    );
+    const referrerCustomer = customers.find(
+      (c) => c.referralCode && c.referralCode.trim().toUpperCase() === cleanCode
+    );
+    const referrer = referrerCustomer || referrerUser;
+
+    const referrerId = referrer?.id || (cleanCode === '8111443' && customers[0]?.id ? customers[0].id : 'referrer-unknown');
+    const refName = referrer?.name || 'Cliente Indicador';
+    const refPhone = referrer?.phone || '';
+
+    const isRefereeDiscountActive = referralProgram.giveRefereeDiscount !== false;
+    const effectiveDiscountGiven = isRefereeDiscountActive ? (discountGiven ?? referralProgram.refereeDiscount ?? 5.0) : 0;
+
+    const newRef: Referral = {
+      id: `ref-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      referrerCustomerId: referrerId,
+      referrerName: refName,
+      referrerPhone: refPhone,
+      referrerCode: cleanCode,
+      refereeCustomerId: currentUser?.id,
+      refereeName: refereeName.trim(),
+      refereePhone: refereePhone.trim(),
+      appointmentId,
+      rewardAmount: referralProgram.referrerReward || 5.0,
+      discountGiven: effectiveDiscountGiven,
+      status: referralProgram.rewardTrigger === 'on_booking' ? 'concluido' : 'pendente',
+      createdAt: new Date().toISOString(),
+      ...(referralProgram.rewardTrigger === 'on_booking' ? { completedAt: new Date().toISOString() } : {}),
+    };
+
+    setReferrals((prev) => [newRef, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'referrals', newRef.id), cleanFirestoreData(newRef));
+    } catch (e) {
+      console.warn('Referral saved locally:', e);
+    }
+
+    if (referralProgram.rewardTrigger === 'on_booking' && referrerId) {
+      await adjustCustomerWallet(
+        referrerId,
+        newRef.rewardAmount,
+        `Bônus por indicação de ${newRef.refereeName}`
+      );
+    }
+
+    addNotification(
+      'indicacao',
+      'Nova Indicação Registrada!',
+      `${refName} indicou o novo cliente ${refereeName} (${refereePhone}). Bônus de R$ ${newRef.rewardAmount.toFixed(2)} ${newRef.status === 'concluido' ? 'creditado' : 'pendente até o 1º corte'}.`
+    );
+
+    return newRef;
+  };
+
+  const approveReferral = async (referralId: string): Promise<boolean> => {
+    const target = referrals.find((r) => r.id === referralId);
+    if (!target) return false;
+
+    const completedAt = new Date().toISOString();
+    const updated = {
+      status: 'concluido' as ReferralStatus,
+      completedAt,
+    };
+
+    setReferrals((prev) =>
+      prev.map((r) => (r.id === referralId ? { ...r, ...updated } : r))
+    );
+
+    try {
+      await updateDoc(doc(db, 'referrals', referralId), updated);
+    } catch (e) {
+      console.warn('Referral approved locally:', e);
+    }
+
+    if (target.referrerCustomerId) {
+      await adjustCustomerWallet(
+        target.referrerCustomerId,
+        target.rewardAmount,
+        `Bônus liberado pela indicação de ${target.refereeName}`
+      );
+    }
+
+    addAdminLog(
+      'Aprovação de Indicação',
+      `Indicação ${referralId} de ${target.referrerName} para ${target.refereeName} aprovada. Bônus de R$ ${target.rewardAmount.toFixed(2)} creditado.`
+    );
+    addToast(`Indicação aprovada! R$ ${target.rewardAmount.toFixed(2)} creditado para ${target.referrerName}.`, 'success');
+    return true;
+  };
+
+  const cancelReferral = async (referralId: string, reason?: string): Promise<boolean> => {
+    const target = referrals.find((r) => r.id === referralId);
+    if (!target) return false;
+
+    const cancelledAt = new Date().toISOString();
+    const updated = {
+      status: 'cancelado' as ReferralStatus,
+      cancelledAt,
+      notes: reason || 'Indicação cancelada pelo administrador.',
+    };
+
+    setReferrals((prev) =>
+      prev.map((r) => (r.id === referralId ? { ...r, ...updated } : r))
+    );
+
+    try {
+      await updateDoc(doc(db, 'referrals', referralId), updated);
+    } catch (e) {
+      console.warn('Referral cancelled locally:', e);
+    }
+
+    addAdminLog(
+      'Cancelamento de Indicação',
+      `Indicação de ${target.referrerName} cancelada.${reason ? ` Motivo: ${reason}` : ''}`
+    );
+    addToast('Indicação cancelada.', 'info');
+    return true;
+  };
+
+  const deleteReferral = async (referralId: string): Promise<boolean> => {
+    setReferrals((prev) => prev.filter((r) => r.id !== referralId));
+    try {
+      await deleteDoc(doc(db, 'referrals', referralId));
+    } catch (e) {
+      console.warn('Referral deleted locally:', e);
+    }
+    addToast('Indicação removida do histórico.', 'info');
+    return true;
+  };
+
+  const adjustCustomerWallet = async (
+    customerId: string,
+    amountChange: number,
+    reason: string
+  ): Promise<boolean> => {
+    let targetCustomer = customers.find((c) => c.id === customerId);
+    let targetUser = registeredUsers.find((u) => u.id === customerId);
+
+    const currentBal = targetCustomer?.referralWalletBalance || targetUser?.referralWalletBalance || 0;
+    const newBal = Math.max(0, currentBal + amountChange);
+    const newTotalEarned = amountChange > 0
+      ? (targetCustomer?.totalEarnedFromReferrals || 0) + amountChange
+      : (targetCustomer?.totalEarnedFromReferrals || 0);
+    const newTotalRefs = amountChange > 0
+      ? (targetCustomer?.totalReferrals || 0) + 1
+      : (targetCustomer?.totalReferrals || 0);
+
+    const updatePayload: Partial<Customer> = {
+      referralWalletBalance: newBal,
+      totalEarnedFromReferrals: newTotalEarned,
+      totalReferrals: newTotalRefs,
+    };
+
+    setCustomers((prev) =>
+      prev.map((c) => (c.id === customerId ? { ...c, ...updatePayload } : c))
+    );
+
+    setRegisteredUsers((prev) =>
+      prev.map((u) => (u.id === customerId ? { ...u, referralWalletBalance: newBal } : u))
+    );
+
+    if (currentUser && currentUser.id === customerId) {
+      const updatedUser = { ...currentUser, referralWalletBalance: newBal };
+      setCurrentUser(updatedUser);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updatedUser));
+      } catch (e) {}
+    }
+
+    try {
+      await updateDoc(doc(db, 'customers', customerId), updatePayload);
+    } catch (e) {}
+
+    try {
+      await updateDoc(doc(db, 'users', customerId), { referralWalletBalance: newBal });
+    } catch (e) {}
+
+    addAdminLog(
+      'Ajuste de Carteira de Indicação',
+      `Saldo de ${targetCustomer?.name || targetUser?.name || customerId} ajustado em R$ ${amountChange > 0 ? '+' : ''}${amountChange.toFixed(2)} (Novo saldo: R$ ${newBal.toFixed(2)}). Motivo: ${reason}`
+    );
+    return true;
+  };
+
+  const useCustomerWalletCredits = async (customerId: string, amount: number): Promise<boolean> => {
+    return adjustCustomerWallet(customerId, -amount, `Uso de saldo em agendamento`);
+  };
+
   const clearNotifications = () => {
     setNotifications([]);
     notifications.forEach((n) => {
@@ -3242,6 +3690,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markAllNotificationsRead,
         deleteNotification,
         clearNotifications,
+        referrals,
+        referralProgram,
+        updateReferralProgramConfig,
+        applyReferralCode,
+        createReferral,
+        approveReferral,
+        cancelReferral,
+        deleteReferral,
+        adjustCustomerWallet,
+        useCustomerWalletCredits,
+        currentUserReferralCode,
         passwordResetRequests,
         requestPasswordReset,
         generateTempPasswordForReset,

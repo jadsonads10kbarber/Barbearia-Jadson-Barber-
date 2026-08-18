@@ -25,8 +25,8 @@ import {
   TimeSlot,
 } from '../utils/availability';
 import { Modal } from '../components/Modal';
-import { findSmartComboMatch } from '../utils/comboMatcher';
-import { Sparkles } from 'lucide-react';
+import { findSmartComboMatch, getComboDiscountDetails } from '../utils/comboMatcher';
+import { Sparkles, Flame } from 'lucide-react';
 
 export const MeusAgendamentosPage: React.FC = () => {
   const {
@@ -235,6 +235,44 @@ export const MeusAgendamentosPage: React.FC = () => {
 
     setEditServicesAppointmentItem(null);
   };
+
+  const editModalSummary = useMemo(() => {
+    if (editSelectedCombo) {
+      return {
+        price: editSelectedCombo.price,
+        duration: editSelectedCombo.durationMinutes,
+        isCombo: true,
+        label: editSelectedCombo.name,
+        savings: 0,
+      };
+    }
+    if (editSelectedServices.length > 0) {
+      const match = findSmartComboMatch(editSelectedServices, services);
+      if (match) {
+        return {
+          price: match.smartTotalPrice,
+          duration: match.smartTotalDuration,
+          isCombo: true,
+          label: `${match.combo.name} (Combo Promocional)`,
+          savings: match.savings,
+        };
+      }
+      return {
+        price: editSelectedServices.reduce((sum, s) => sum + s.price, 0),
+        duration: editSelectedServices.reduce((sum, s) => sum + s.durationMinutes, 0),
+        isCombo: false,
+        label: `${editSelectedServices.length} serviço(s) selecionado(s)`,
+        savings: 0,
+      };
+    }
+    return {
+      price: 0,
+      duration: 0,
+      isCombo: false,
+      label: 'Nenhum serviço selecionado',
+      savings: 0,
+    };
+  }, [editSelectedCombo, editSelectedServices, services]);
 
   const currentList = activeTab === 'proximos' ? upcomingList : historyList;
 
@@ -647,12 +685,14 @@ export const MeusAgendamentosPage: React.FC = () => {
 
           {/* Combos */}
           <div>
-            <h4 className="text-xs font-bold uppercase text-amber-400 mb-2 font-mono">Combos</h4>
+            <h4 className="text-xs font-bold uppercase text-amber-400 mb-2 font-mono">Combos Promocionais</h4>
             <div className="space-y-2">
               {services
                 .filter((s) => s.category === 'combo')
                 .map((combo) => {
                   const isSelected = editSelectedCombo?.id === combo.id;
+                  const discount = getComboDiscountDetails(combo, services);
+
                   return (
                     <button
                       key={combo.id}
@@ -664,14 +704,29 @@ export const MeusAgendamentosPage: React.FC = () => {
                           setEditSelectedServices([]);
                         }
                       }}
-                      className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between text-xs ${
+                      className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between text-xs cursor-pointer ${
                         isSelected
                           ? 'bg-amber-500/20 border-amber-400 text-white font-bold'
-                          : 'bg-neutral-950 border-neutral-800 text-gray-300'
+                          : 'bg-neutral-950 border-neutral-800 text-gray-300 hover:border-neutral-700'
                       }`}
                     >
-                      <span>{combo.name}</span>
-                      <span className="font-mono text-amber-400">R$ {combo.price.toFixed(2)}</span>
+                      <div className="flex items-center gap-2">
+                        <span>{combo.name}</span>
+                        {discount.hasDiscount && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono font-bold px-1.5 py-0.5 rounded">
+                            <Flame className="w-2.5 h-2.5 text-emerald-400" />
+                            {discount.discountPercentage}% OFF
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="font-mono text-amber-400 font-bold block">R$ {combo.price.toFixed(2).replace('.', ',')}</span>
+                        {discount.hasDiscount && (
+                          <span className="text-[10px] text-neutral-500 line-through font-mono block">
+                            R$ {discount.originalPrice.toFixed(2).replace('.', ',')}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   );
                 })}
@@ -713,6 +768,25 @@ export const MeusAgendamentosPage: React.FC = () => {
                   );
                 })}
             </div>
+          </div>
+
+          {/* Live Recalculation Summary Box */}
+          <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400">Duração Total:</span>
+              <span className="text-white font-bold font-mono">{editModalSummary.duration} min</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-300 font-bold">Novo Valor Total:</span>
+              <span className="text-amber-400 font-black font-mono text-base">
+                R$ {editModalSummary.price.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+            {editModalSummary.savings > 0 && (
+              <div className="text-[11px] text-emerald-400 font-mono text-right">
+                Economia aplicada de R$ {editModalSummary.savings.toFixed(2).replace('.', ',')}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-3 border-t border-neutral-800">

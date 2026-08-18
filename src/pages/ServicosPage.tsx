@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Scissors, Clock, Sparkles, ArrowRight, Search, X } from 'lucide-react';
+import { Scissors, Clock, Sparkles, ArrowRight, Search, X, Flame } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { getComboDiscountDetails } from '../utils/comboMatcher';
 
 export const ServicosPage: React.FC = () => {
   const { services, setActivePage, barbershopInfo } = useApp();
@@ -204,71 +205,118 @@ export const ServicosPage: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3.5">
-              {comboServices.map((combo) => (
-                <div
-                  key={combo.id}
-                  className="bg-[#111111]/90 border border-[#DAA520]/40 rounded-2xl p-5 shadow-xl space-y-3.5 relative overflow-hidden hover:border-[#DAA520]/70 transition-all duration-200"
-                >
-                  {/* 1. Tag Combo */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 bg-[#DAA520] text-black font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-lg font-sans shadow-sm">
-                      <Scissors className="w-3 h-3 stroke-[2.5]" />
-                      <span>Combo</span>
-                    </span>
+              {comboServices.map((combo) => {
+                const discount = getComboDiscountDetails(combo, services);
 
-                    {combo.popular && (
-                      <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold px-2 py-0.5 rounded-md uppercase font-sans">
-                        Mais Pedido
-                      </span>
-                    )}
-                  </div>
+                return (
+                  <div
+                    key={combo.id}
+                    className="bg-[#111111]/90 border border-[#DAA520]/40 rounded-2xl p-5 shadow-xl space-y-3.5 relative overflow-hidden hover:border-[#DAA520]/70 transition-all duration-200"
+                  >
+                    {/* 1. Tag Combo & Desconto % */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 bg-[#DAA520] text-black font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-lg font-sans shadow-sm">
+                          <Scissors className="w-3 h-3 stroke-[2.5]" />
+                          <span>Combo</span>
+                        </span>
 
-                  {/* 2. Nome do serviço */}
-                  <div>
-                    <h3 className="text-base sm:text-lg font-bold text-white font-sans">{combo.name}</h3>
-                  </div>
+                        {discount.hasDiscount && (
+                          <span className="inline-flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-sans shadow-sm">
+                            <Flame className="w-3 h-3 text-emerald-400 fill-emerald-400/40" />
+                            <span>{discount.discountPercentage}% OFF</span>
+                          </span>
+                        )}
+                      </div>
 
-                  {/* 3. Preço & 4. Duração */}
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 bg-black/50 p-3 rounded-xl border border-white/5">
+                      {combo.popular && (
+                        <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold px-2 py-0.5 rounded-md uppercase font-sans">
+                          Mais Pedido
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 2. Nome do serviço */}
                     <div>
-                      <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block">Preço</span>
-                      <span className="text-xl font-black text-[#DAA520] font-sans">
-                        R$ {combo.price.toFixed(2).replace('.', ',')}
-                      </span>
+                      <h3 className="text-base sm:text-lg font-bold text-white font-sans">{combo.name}</h3>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block">Duração</span>
-                      <span className="text-xs font-bold text-gray-200 flex items-center justify-end gap-1 font-sans">
-                        <Clock className="w-3.5 h-3.5 text-[#DAA520]" />
-                        {combo.durationMinutes} minutos
-                      </span>
+                    {/* 3. Preço com Desconto & 4. Duração */}
+                    <div className="flex flex-wrap items-start justify-between gap-2 bg-black/50 p-3.5 rounded-xl border border-white/5">
+                      <div>
+                        <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block">Preço</span>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-xl font-black text-[#DAA520] font-sans">
+                            R$ {combo.price.toFixed(2).replace('.', ',')}
+                          </span>
+                          {discount.hasDiscount && (
+                            <span className="text-xs text-neutral-400 line-through font-sans">
+                              R$ {discount.originalPrice.toFixed(2).replace('.', ',')}
+                            </span>
+                          )}
+                        </div>
+                        {discount.hasDiscount && (
+                          <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 font-sans mt-0.5">
+                            <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                            Economia de R$ {discount.savingsAmount.toFixed(2).replace('.', ',')} ({discount.discountPercentage}% OFF)
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block">Duração</span>
+                        <span className="text-xs font-bold text-gray-200 flex items-center justify-end gap-1 font-sans">
+                          <Clock className="w-3.5 h-3.5 text-[#DAA520]" />
+                          {combo.durationMinutes} minutos
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* 5. Descrição */}
-                  <div>
-                    <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block mb-1">Descrição:</span>
-                    <p className="text-xs text-gray-300 font-sans leading-relaxed bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                      {combo.description || 'Procedimento completo combinado com produtos de alta qualidade.'}
-                    </p>
-                  </div>
+                    {/* 5. Descrição */}
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-sans uppercase tracking-wider block mb-1">Descrição:</span>
+                      <p className="text-xs text-gray-300 font-sans leading-relaxed bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                        {combo.description || 'Procedimento completo combinado com produtos de alta qualidade.'}
+                      </p>
+                    </div>
 
-                  {/* Action */}
-                  <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400 font-sans">Atendimento exclusivo com horário marcado</span>
-                    {isAgendamentoEnabled && (
-                      <button
-                        onClick={() => setActivePage('agenda')}
-                        className="py-2 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-md shadow-[#DAA520]/20 cursor-pointer"
-                      >
-                        <span>Agendar Este Combo</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                    {/* 6. Serviços Inclusos se detectados */}
+                    {discount.includedServices.length > 0 && (
+                      <div className="pt-0.5">
+                        <span className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1 font-sans">
+                          Serviços inclusos no pacote:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {discount.includedServices.map((inc) => (
+                            <span
+                              key={inc.id}
+                              className="inline-flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md text-[10px] text-gray-300 font-sans"
+                            >
+                              <Scissors className="w-2.5 h-2.5 text-[#DAA520]" />
+                              <span>{inc.name}</span>
+                              <span className="text-neutral-400">(R$ {inc.price.toFixed(2).replace('.', ',')})</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
+
+                    {/* Action */}
+                    <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between">
+                      <span className="text-[11px] text-gray-400 font-sans">Atendimento exclusivo com horário marcado</span>
+                      {isAgendamentoEnabled && (
+                        <button
+                          onClick={() => setActivePage('agenda')}
+                          className="py-2 px-4 rounded-xl bg-[#DAA520] hover:bg-[#c9951b] text-black font-extrabold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-md shadow-[#DAA520]/20 cursor-pointer"
+                        >
+                          <span>Agendar Este Combo</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

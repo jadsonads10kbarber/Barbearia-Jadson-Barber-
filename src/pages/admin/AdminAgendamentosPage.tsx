@@ -133,11 +133,18 @@ export const AdminAgendamentosPage: React.FC = () => {
   };
 
   const toggleEditServiceSelection = (servId: string) => {
+    let nextIds: string[];
     if (editSelectedServiceIds.includes(servId)) {
-      setEditSelectedServiceIds(editSelectedServiceIds.filter((id) => id !== servId));
+      nextIds = editSelectedServiceIds.filter((id) => id !== servId);
     } else {
-      setEditSelectedServiceIds([...editSelectedServiceIds, servId]);
+      nextIds = [...editSelectedServiceIds, servId];
     }
+    setEditSelectedServiceIds(nextIds);
+
+    // Automatically recalculate total price and duration when services change
+    const nextServices = services.filter((s) => nextIds.includes(s.id));
+    const nextPrice = nextServices.reduce((acc, s) => acc + s.price, 0);
+    setEditCustomPrice(nextPrice.toString());
   };
 
   const handleManualBookingSubmit = async (e: React.FormEvent) => {
@@ -254,8 +261,19 @@ export const AdminAgendamentosPage: React.FC = () => {
 
     const editServicesList = services.filter((s) => editSelectedServiceIds.includes(s.id));
     const calculatedPrice = editServicesList.reduce((acc, s) => acc + s.price, 0);
-    const finalPrice = editCustomPrice ? parseFloat(editCustomPrice) || calculatedPrice : calculatedPrice;
+    const finalPrice = editCustomPrice !== '' ? parseFloat(editCustomPrice) || calculatedPrice : calculatedPrice;
     const calculatedDuration = editServicesList.reduce((acc, s) => acc + s.durationMinutes, 0) || targetAppointment.totalDuration;
+
+    let recalculatedEndTime = targetAppointment.endTime;
+    if (targetAppointment.startTime) {
+      const [sh, sm] = targetAppointment.startTime.split(':').map(Number);
+      const totalMin = sh * 60 + sm + calculatedDuration;
+      const endH = Math.floor(totalMin / 60);
+      const endM = totalMin % 60;
+      recalculatedEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    }
+
+    const isCombo = editServicesList.some((s) => s.category === 'combo');
 
     const selectedBarber = barbers.find((b) => b.id === editBarberId) || {
       id: targetAppointment.barberId,
@@ -277,6 +295,8 @@ export const AdminAgendamentosPage: React.FC = () => {
         : targetAppointment.services,
       totalPrice: finalPrice,
       totalDuration: calculatedDuration,
+      isCombo,
+      endTime: recalculatedEndTime,
       status: editStatus,
       notes: editNotes.trim(),
     });

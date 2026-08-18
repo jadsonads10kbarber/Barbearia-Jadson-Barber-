@@ -14,6 +14,7 @@ import {
   User,
   LogOut,
   TicketPercent,
+  Gift,
   Star,
   Newspaper,
   Smartphone,
@@ -57,6 +58,7 @@ export const Sidebar: React.FC = () => {
   const rawMenuItems = [
     { id: 'agenda' as ActivePage, label: 'Agendar', icon: Calendar, visible: modules.showAgendamento !== false },
     { id: 'meus-agendamentos' as ActivePage, label: 'Agendamentos', icon: CalendarCheck, visible: modules.showMeusAgendamentos !== false },
+    { id: 'indique-e-ganhe' as ActivePage, label: 'Indique e Ganhe (Bônus)', icon: Gift, visible: modules.showIndiqueEGanhe !== false },
     { id: 'cupons' as ActivePage, label: 'Cupons de Desconto', icon: TicketPercent, visible: modules.showCupons !== false },
     { id: 'barbearia' as ActivePage, label: 'A Barbearia', icon: Store, visible: modules.showBarbearia !== false },
     ...(isLoggedIn ? [{ id: 'perfil' as ActivePage, label: 'Meu Perfil', icon: User, visible: true }] : []),

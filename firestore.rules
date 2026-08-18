@@ -118,5 +118,10 @@ service cloud.firestore {
     match /passwordResetRequests/{reqId} {
       allow read, write: if true;
     }
+
+    // Referrals / Indique e Ganhe
+    match /referrals/{referralId} {
+      allow read, write: if true;
+    }
   }
 }

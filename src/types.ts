@@ -40,6 +40,7 @@ export interface ServiceItem {
   id: string;
   name: string;
   price: number;
+  originalPrice?: number;
   durationMinutes: number;
   description: string;
   category: 'individual' | 'combo';
@@ -84,6 +85,9 @@ export interface Appointment {
   deletedBy?: 'admin' | 'cliente';
   deletedByName?: string;
   paymentMethod?: string;
+  referralCodeUsed?: string;
+  referralDiscountApplied?: number;
+  walletDiscountApplied?: number;
   notes?: string;
   reviewed?: boolean;
   reviewRating?: number;
@@ -125,6 +129,10 @@ export interface UserAccount {
   email: string;
   phone: string;
   accessCode?: string; // 3 digits + 1 letter, e.g. "123A"
+  referralCode?: string; // 7-digit code, e.g. "8111443"
+  referralWalletBalance?: number; // R$
+  referredByCode?: string;
+  referredByCustomerId?: string;
   password?: string;
   avatar?: string;
   createdAt: string;
@@ -137,6 +145,12 @@ export interface Customer {
   email: string;
   phone: string;
   accessCode?: string; // 3 digits + 1 letter, e.g. "123A"
+  referralCode?: string; // 7-digit code, e.g. "8111443"
+  referralWalletBalance?: number; // R$
+  referredByCode?: string;
+  referredByCustomerId?: string;
+  totalReferrals?: number;
+  totalEarnedFromReferrals?: number; // R$
   password?: string;
   avatar?: string;
   photo?: string;
@@ -265,12 +279,13 @@ export interface AdminLog {
 
 export interface AdminNotification {
   id: string;
-  type: 'agendamento' | 'cancelamento' | 'reagendamento' | 'avaliacao' | 'estoque' | 'cliente' | 'venda' | 'recuperacao_senha';
+  type: 'agendamento' | 'cancelamento' | 'reagendamento' | 'avaliacao' | 'estoque' | 'cliente' | 'venda' | 'recuperacao_senha' | 'indicacao';
   title: string;
   message: string;
   date: string;
   read: boolean;
   appointmentId?: string;
+  referralId?: string;
   customerAvatar?: string;
   resetRequestId?: string;
   customerName?: string;
@@ -278,6 +293,41 @@ export interface AdminNotification {
   customerEmail?: string;
   tempCode?: string;
   resetStatus?: 'pendente' | 'temp_code_generated' | 'concluido';
+}
+
+export type ReferralStatus = 'pendente' | 'concluido' | 'cancelado';
+
+export interface Referral {
+  id: string; // e.g. 'ref-1700000000'
+  referrerCustomerId: string;
+  referrerName: string;
+  referrerPhone: string;
+  referrerCode: string; // e.g. '8111443'
+  refereeCustomerId?: string;
+  refereeName: string;
+  refereePhone: string;
+  appointmentId?: string;
+  rewardAmount: number; // R$ 5.00 ganho pelo indicador
+  discountGiven: number; // R$ 5.00 desconto dado ao amigo
+  status: ReferralStatus;
+  createdAt: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  notes?: string;
+}
+
+export interface ReferralProgramConfig {
+  active: boolean; // Programa ativo ou inativo
+  title?: string; // Título customizado exibido no banner
+  description?: string; // Descrição customizada
+  referrerReward: number; // Valor R$ pago ao indicador por indicação válida (ex: 5.00)
+  giveRefereeDiscount?: boolean; // Ativar/desativar desconto para o amigo indicado
+  refereeDiscount: number; // Valor do benefício dado ao novo cliente indicado (ex: 5.00)
+  refereeDiscountType: 'fixed' | 'percentage';
+  rewardTrigger: 'first_completed' | 'on_booking'; // quando libera o bônus: ao concluir 1º atendimento ou ao agendar
+  minOrderValue: number; // Valor mínimo para uso
+  shareMessageTemplate: string; // Mensagem padrão para WhatsApp
+  rulesDescription?: string;
 }
 
 export interface PasswordResetRequest {
@@ -310,6 +360,7 @@ export interface ClientAppModulesConfig {
   showAgendamento: boolean; // Agendar Horário (Agendamento)
   showMeusAgendamentos: boolean; // Meus Agendamentos / Histórico
   showCupons: boolean; // Cupons de Desconto
+  showIndiqueEGanhe?: boolean; // Indique e Ganhe (Ganhe R$ 5,00)
   showBarbearia: boolean; // A Barbearia (Informações, Localização, Contato)
   showServicos: boolean; // Serviços & Preços / Combos
   showEquipe: boolean; // Nossa Equipe / Barbeiros

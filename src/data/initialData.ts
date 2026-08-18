@@ -13,18 +13,37 @@ import {
   Review,
   AdminNotification,
   ClientAppModulesConfig,
+  ReferralProgramConfig,
+  Referral,
 } from '../types';
 
 export const defaultClientModules: ClientAppModulesConfig = {
   showAgendamento: true,
   showMeusAgendamentos: true,
   showCupons: true,
+  showIndiqueEGanhe: true,
   showBarbearia: true,
   showServicos: true,
   showEquipe: true,
   showAvaliacoes: true,
   showFeed: true,
 };
+
+export const defaultReferralProgramConfig: ReferralProgramConfig = {
+  active: true,
+  referrerReward: 5.0, // Ganhe R$ 5,00 para cada indicação
+  giveRefereeDiscount: true, // Desconto para o amigo indicado ativado por padrão
+  refereeDiscount: 5.0, // R$ 5,00 de desconto no 1º agendamento
+  refereeDiscountType: 'fixed',
+  rewardTrigger: 'first_completed', // Liberado quando o amigo conclui o primeiro atendimento
+  minOrderValue: 0,
+  shareMessageTemplate:
+    'E aí! Estou te presenteando com R$ 5,00 de desconto no seu corte na Barbearia Jadson Barber! Use o meu código {CODIGO} ao agendar pelo app ou web. Agende agora:',
+  rulesDescription:
+    'Indique amigos que ainda não agendaram na Barbearia Jadson Barber. Eles ganham R$ 5,00 de desconto de boas-vindas no primeiro atendimento e você ganha R$ 5,00 em saldo na sua carteira assim que o corte dele for concluído! Você pode acumular e abater nos seus próximos agendamentos ou produtos.',
+};
+
+export const initialReferrals: Referral[] = [];
 
 export const initialBarbershopInfo: BarbershopInfo = {
   name: 'Barbearia Jadson Barber',

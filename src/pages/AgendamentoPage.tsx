@@ -20,20 +20,24 @@ import {
   X,
   TicketPercent,
   Tag,
+  Gift,
+  Wallet,
   CheckCircle2,
   Smartphone,
   Download,
+  Flame,
+  Percent,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePwa } from '../context/PwaContext';
-import { Barber, ServiceItem, AppointmentService, Coupon } from '../types';
+import { Barber, ServiceItem, AppointmentService, Coupon, Customer } from '../types';
 import {
   getAvailableSlots,
   formatDateBR,
   getWeekdayName,
   TimeSlot,
 } from '../utils/availability';
-import { findSmartComboMatch, SmartComboMatch } from '../utils/comboMatcher';
+import { findSmartComboMatch, SmartComboMatch, getComboDiscountDetails } from '../utils/comboMatcher';
 
 type BookingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 // 1: Calendário
@@ -63,14 +67,40 @@ export const AgendamentoPage: React.FC = () => {
     setSelectedBarberForBooking,
     isLoggedIn,
     currentUser,
+    applyReferralCode,
+    createReferral,
+    useCustomerWalletCredits,
+    referralProgram,
+    customers,
   } = useApp();
   const { isInstalled, openInstallModal, triggerInstall, isIOS } = usePwa();
 
   const [currentStep, setCurrentStep] = useState<BookingStep>(1);
 
-  // Coupon state
+  // Coupon & Referral state
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [appliedReferral, setAppliedReferral] = useState<{
+    code: string;
+    referrerCustomer: Customer;
+    discountAmount: number;
+    rewardAmount: number;
+  } | null>(null);
+
+  // Wallet Credits State
+  const [useWalletCredit, setUseWalletCredit] = useState(false);
+
+  // Customer Wallet Balance
+  const currentCustomer = useMemo(() => {
+    return customers.find(
+      (c) =>
+        (currentUser?.id && c.id === currentUser.id) ||
+        (currentUser?.phone && c.phone === currentUser.phone) ||
+        (customerPhone && c.phone === customerPhone)
+    );
+  }, [customers, currentUser, customerPhone]);
+
+  const customerWalletBalance = currentCustomer?.referralWalletBalance || currentUser?.referralWalletBalance || 0;
 
   // Today ISO date YYYY-MM-DD
   const todayIso = useMemo(() => {
@@ -324,24 +354,65 @@ export const AgendamentoPage: React.FC = () => {
     return Math.min(appliedCoupon.discountValue, totalPrice);
   }, [appliedCoupon, totalPrice]);
 
-  const finalTotalPrice = useMemo(() => {
-    return Math.max(0, totalPrice - couponDiscount);
-  }, [totalPrice, couponDiscount]);
+  // Referral Code discount (Indique e Ganhe)
+  const referralDiscount = useMemo(() => {
+    if (!appliedReferral) return 0;
+    return Math.min(appliedReferral.discountAmount, Math.max(0, totalPrice - couponDiscount));
+  }, [appliedReferral, totalPrice, couponDiscount]);
 
-  const handleApplyCoupon = () => {
+  // Wallet credits discount
+  const walletDiscount = useMemo(() => {
+    if (!useWalletCredit || customerWalletBalance <= 0) return 0;
+    const remainingAfterDiscounts = Math.max(0, totalPrice - couponDiscount - referralDiscount);
+    return Math.min(customerWalletBalance, remainingAfterDiscounts);
+  }, [useWalletCredit, customerWalletBalance, totalPrice, couponDiscount, referralDiscount]);
+
+  const finalTotalPrice = useMemo(() => {
+    return Math.max(0, totalPrice - couponDiscount - referralDiscount - walletDiscount);
+  }, [totalPrice, couponDiscount, referralDiscount, walletDiscount]);
+
+  const handleApplyCoupon = async () => {
     const codeClean = couponCodeInput.trim().toUpperCase();
     if (!codeClean) {
-      addToast('Digite o código do cupom.', 'error');
+      addToast('Digite o código do cupom ou indicação.', 'error');
       return;
     }
 
+    // 1. Check if it is a Referral Code (Indique e Ganhe)
+    if (referralProgram.active) {
+      const refCheck = await applyReferralCode(
+        codeClean,
+        customerPhone || currentUser?.phone || ''
+      );
+
+      if (refCheck.valid && refCheck.referrer) {
+        setAppliedReferral({
+          code: codeClean,
+          referrerCustomer: refCheck.referrer as Customer,
+          discountAmount: refCheck.discountAmount,
+          rewardAmount: referralProgram.referrerReward || 5.0,
+        });
+        setAppliedCoupon(null);
+        addToast(
+          `Código de Indicação "${codeClean}" aplicado! Desconto de R$ ${refCheck.discountAmount.toFixed(2).replace('.', ',')}`,
+          'success'
+        );
+        return;
+      } else if (refCheck.message && !refCheck.message.includes('não encontrado')) {
+        addToast(refCheck.message, 'error');
+        return;
+      }
+    }
+
+    // 2. Check Standard Coupons
     const found = coupons.find(
       (c) => c.code.toUpperCase() === codeClean && c.status === 'ativo'
     );
 
     if (!found) {
-      addToast('Cupom inválido, inativo ou não encontrado.', 'error');
+      addToast('Código de cupom ou indicação inválido ou não encontrado.', 'error');
       setAppliedCoupon(null);
+      setAppliedReferral(null);
       return;
     }
 
@@ -407,6 +478,7 @@ export const AgendamentoPage: React.FC = () => {
     }
 
     setAppliedCoupon(found);
+    setAppliedReferral(null);
     addToast(`Cupom "${found.code}" aplicado com sucesso!`, 'success');
   };
 
@@ -713,7 +785,29 @@ export const AgendamentoPage: React.FC = () => {
         totalDuration,
         totalPrice: finalTotalPrice,
         status: 'Agendado',
+        referralCodeUsed: appliedReferral?.code,
+        referralDiscountApplied: referralDiscount > 0 ? referralDiscount : undefined,
+        walletDiscountApplied: walletDiscount > 0 ? walletDiscount : undefined,
       });
+
+      // If a Referral Code was used, register the Referral record
+      if (appliedReferral) {
+        await createReferral(
+          appliedReferral.code,
+          effectiveName,
+          effectivePhone,
+          created.id,
+          appliedReferral.discountAmount
+        );
+      }
+
+      // If customer used their Wallet Balance credits, deduct it
+      if (walletDiscount > 0 && currentUser?.id) {
+        await useCustomerWalletCredits(
+          currentUser.id,
+          walletDiscount
+        );
+      }
 
       setCreatedAppointmentId(created.id);
 
@@ -1545,6 +1639,7 @@ export const AgendamentoPage: React.FC = () => {
                     {filteredCombos.map((combo) => {
                       const isSelected = selectedCombo?.id === combo.id;
                       const isDisabled = selectedIndividualServices.length > 0;
+                      const discount = getComboDiscountDetails(combo, services);
 
                       return (
                         <div
@@ -1558,12 +1653,21 @@ export const AgendamentoPage: React.FC = () => {
                               : 'bg-[#111111]/90 border-white/10 hover:border-[#DAA520]/40 cursor-pointer'
                           }`}
                         >
-                          {/* 1. Tag Combo */}
+                          {/* 1. Tag Combo & Desconto % */}
                           <div className="flex items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1.5 bg-[#DAA520] text-black font-extrabold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-sans shadow-sm">
-                              <Scissors className="w-3 h-3 stroke-[2.5]" />
-                              <span>Combo</span>
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5 bg-[#DAA520] text-black font-extrabold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-sans shadow-sm">
+                                <Scissors className="w-3 h-3 stroke-[2.5]" />
+                                <span>Combo</span>
+                              </span>
+
+                              {discount.hasDiscount && (
+                                <span className="inline-flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-sans shadow-sm">
+                                  <Flame className="w-3 h-3 text-emerald-400 fill-emerald-400/40" />
+                                  <span>{discount.discountPercentage}% OFF</span>
+                                </span>
+                              )}
+                            </div>
 
                             <div className="flex items-center gap-2">
                               {combo.popular && (
@@ -1588,15 +1692,28 @@ export const AgendamentoPage: React.FC = () => {
                             <h4 className="text-sm sm:text-base font-bold text-white font-sans">{combo.name}</h4>
                           </div>
 
-                          {/* 3. Preço & 4. Duração */}
-                          <div className="flex items-baseline justify-between bg-black/60 px-3 py-2 rounded-xl border border-white/5">
+                          {/* 3. Preço com Desconto & 4. Duração */}
+                          <div className="flex items-start justify-between bg-black/60 px-3.5 py-2.5 rounded-xl border border-white/5 gap-2">
                             <div>
                               <span className="text-[9px] text-[#8E9299] font-sans uppercase tracking-wider block">Preço</span>
-                              <span className="text-base font-black text-[#DAA520] font-sans">
-                                R$ {combo.price.toFixed(2).replace('.', ',')}
-                              </span>
+                              <div className="flex items-baseline gap-2 flex-wrap">
+                                <span className="text-base sm:text-lg font-black text-[#DAA520] font-sans">
+                                  R$ {combo.price.toFixed(2).replace('.', ',')}
+                                </span>
+                                {discount.hasDiscount && (
+                                  <span className="text-xs text-neutral-400 line-through font-sans">
+                                    R$ {discount.originalPrice.toFixed(2).replace('.', ',')}
+                                  </span>
+                                )}
+                              </div>
+                              {discount.hasDiscount && (
+                                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 font-sans mt-0.5">
+                                  <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  Economia de R$ {discount.savingsAmount.toFixed(2).replace('.', ',')} ({discount.discountPercentage}% OFF)
+                                </span>
+                              )}
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                               <span className="text-[9px] text-[#8E9299] font-sans uppercase tracking-wider block">Duração</span>
                               <span className="text-xs font-bold text-gray-200 flex items-center justify-end gap-1 font-sans">
                                 <Clock className="w-3 h-3 text-[#DAA520]" />
@@ -1612,6 +1729,27 @@ export const AgendamentoPage: React.FC = () => {
                               {combo.description || 'Procedimento completo combinado.'}
                             </p>
                           </div>
+
+                          {/* 6. Serviços Inclusos se detectados */}
+                          {discount.includedServices.length > 0 && (
+                            <div className="pt-1">
+                              <span className="text-[9px] text-neutral-400 uppercase tracking-wider block mb-1 font-sans">
+                                Serviços inclusos no pacote:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {discount.includedServices.map((inc) => (
+                                  <span
+                                    key={inc.id}
+                                    className="inline-flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md text-[10px] text-gray-300 font-sans"
+                                  >
+                                    <Scissors className="w-2.5 h-2.5 text-[#DAA520]" />
+                                    <span>{inc.name}</span>
+                                    <span className="text-neutral-400">(R$ {inc.price.toFixed(2).replace('.', ',')})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {isDisabled && (
                             <p className="text-[10px] text-[#DAA520]/80 pt-1 font-medium">
@@ -1829,22 +1967,23 @@ export const AgendamentoPage: React.FC = () => {
               )}
             </div>
 
-            {/* Coupon Available Selector & Applied Card */}
-            <div className="pt-2 border-t border-white/5 space-y-2">
+            {/* Coupon & Referral Code Section */}
+            <div className="pt-2 border-t border-white/5 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] uppercase tracking-widest text-[#DAA520] font-bold font-sans flex items-center gap-1">
                   <TicketPercent className="w-3.5 h-3.5" />
-                  Cupom de Desconto
+                  Cupom ou Código de Indicação
                 </span>
-                {availableCustomerCoupons.length > 0 && !appliedCoupon && (
+                {availableCustomerCoupons.length > 0 && !appliedCoupon && !appliedReferral && (
                   <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
                     <Sparkles className="w-3 h-3 animate-pulse text-amber-400" />
-                    {availableCustomerCoupons.length} disponível(is)
+                    {availableCustomerCoupons.length} cupom(ns) disponível(is)
                   </span>
                 )}
               </div>
 
-              {appliedCoupon ? (
+              {/* Applied Coupon Card */}
+              {appliedCoupon && (
                 <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between text-xs font-mono">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -1868,36 +2007,110 @@ export const AgendamentoPage: React.FC = () => {
                     Remover
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {/* Applied Referral Code Card */}
+              {appliedReferral && (
+                <div className="p-2.5 bg-[#DAA520]/10 border border-[#DAA520]/40 rounded-xl flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-[#DAA520]" />
+                    <div>
+                      <span className="font-bold text-[#DAA520]">INDICAÇÃO: {appliedReferral.code}</span>
+                      <span className="text-[10px] text-gray-300 block">
+                        {appliedReferral.discountAmount > 0
+                          ? `Desconto de R$ ${appliedReferral.discountAmount.toFixed(2).replace('.', ',')} no 1º corte (Indicado por ${appliedReferral.referrerCustomer.name})`
+                          : `Código vinculado com sucesso (Indicado por ${appliedReferral.referrerCustomer.name})`}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAppliedReferral(null);
+                      setCouponCodeInput('');
+                      addToast('Código de indicação removido.', 'info');
+                    }}
+                    className="text-[10px] text-red-400 hover:text-red-300 underline cursor-pointer"
+                  >
+                    Remover
+                  </button>
+                </div>
+              )}
+
+              {/* Input for coupon or referral code */}
+              {!appliedCoupon && !appliedReferral && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCodeInput}
+                    onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                    placeholder="Código de cupom ou indicação (ex: 8111443)"
+                    className="flex-1 bg-black/60 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white uppercase font-mono placeholder:normal-case placeholder-neutral-500 focus:outline-none focus:border-[#DAA520]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="py-2 px-3.5 rounded-xl bg-neutral-900 hover:bg-[#DAA520] hover:text-black border border-[#DAA520]/40 text-[#DAA520] font-mono font-bold text-xs uppercase transition-all cursor-pointer"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              )}
+
+              {/* Available Coupons Button */}
+              {!appliedCoupon && !appliedReferral && (
                 <button
                   type="button"
                   onClick={() => setIsAvailableCouponsModalOpen(true)}
-                  className={`w-full py-2.5 px-3 rounded-xl border text-xs font-mono font-bold flex items-center justify-between transition-all cursor-pointer shadow-sm group ${
+                  className={`w-full py-2 px-3 rounded-xl border text-xs font-mono font-bold flex items-center justify-between transition-all cursor-pointer shadow-sm group ${
                     availableCustomerCoupons.length > 0
                       ? 'bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 border-amber-500/40 text-[#DAA520] hover:bg-amber-500/30'
                       : 'bg-neutral-900/80 border-white/10 text-neutral-400 hover:text-white hover:bg-neutral-800'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
                     <span>
                       {availableCustomerCoupons.length > 0
                         ? 'Você possui cupons disponíveis!'
-                        : 'Selecionar Cupom de Desconto'}
+                        : 'Selecionar Cupom da Barbearia'}
                     </span>
                   </div>
                   <span
-                    className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-lg ${
+                    className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-lg ${
                       availableCustomerCoupons.length > 0
                         ? 'bg-[#DAA520] text-black group-hover:scale-105 transition-transform'
                         : 'bg-black text-neutral-400 border border-white/10'
                     }`}
                   >
-                    {availableCustomerCoupons.length > 0
-                      ? 'Ver e Aplicar'
-                      : 'Ver Cupons'}
+                    {availableCustomerCoupons.length > 0 ? 'Ver e Aplicar' : 'Ver Cupons'}
                   </span>
                 </button>
+              )}
+
+              {/* Wallet Credits (Saldo Indique e Ganhe) Option */}
+              {customerWalletBalance > 0 && (
+                <div className="p-3 bg-[#DAA520]/10 border border-[#DAA520]/30 rounded-2xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <Wallet className="w-4 h-4 text-[#DAA520] shrink-0" />
+                    <div>
+                      <span className="text-xs font-bold text-white font-sans block">
+                        Saldo da Carteira de Indicação
+                      </span>
+                      <span className="text-[11px] text-[#DAA520] font-mono font-bold">
+                        R$ {customerWalletBalance.toFixed(2).replace('.', ',')} disponível
+                      </span>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer bg-black/60 px-3 py-1.5 rounded-xl border border-[#DAA520]/30 hover:border-[#DAA520] transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={useWalletCredit}
+                      onChange={(e) => setUseWalletCredit(e.target.checked)}
+                      className="w-4 h-4 accent-[#DAA520] cursor-pointer"
+                    />
+                    <span className="text-xs font-mono font-bold text-white uppercase">Usar Saldo</span>
+                  </label>
+                </div>
               )}
             </div>
 
@@ -1913,9 +2126,9 @@ export const AgendamentoPage: React.FC = () => {
 
               <div className="text-right">
                 <span className="text-[10px] text-[#8E9299] block font-sans">Valor Total:</span>
-                {couponDiscount > 0 ? (
+                {couponDiscount > 0 || referralDiscount > 0 || walletDiscount > 0 ? (
                   <div>
-                    <span className="text-xs text-neutral-400 line-through mr-2">
+                    <span className="text-xs text-neutral-400 line-through mr-2 font-mono">
                       R$ {totalPrice.toFixed(2).replace('.', ',')}
                     </span>
                     <span className="text-xl font-black text-emerald-400 font-sans">
